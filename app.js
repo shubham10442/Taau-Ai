@@ -1,4 +1,4 @@
-// 1. App Data & Sample Syllabi
+// 1. App Data, Samples & Curated Offline Knowledge Bank
 var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 var SAMPLES = [
@@ -9,6 +9,232 @@ var SAMPLES = [
   {
     title: 'Discrete Mathematics',
     text: 'Mod 1: Quantifiers & Proofs\nMod 2: Equivalence Relations\nMod 3: Strong Induction & Recurrences\nMod 4: Pigeonhole & Inclusion-Exclusion'
+  }
+];
+
+var SHEET_BANK = [
+  {
+    keys: ['big-o', 'recurrence', 'master', 'asymptotic', 'complexity'],
+    overview: 'Asymptotic notation bounds algorithm growth as input size n grows, while recurrences model divide-and-conquer runtime.',
+    coreConcepts: [
+      'Big-O gives an asymptotic upper bound f(n) <= c * g(n) for n >= n0.',
+      'Omega gives a tight lower bound and Theta gives both upper and lower bounds.',
+      'Drop lower-order terms and constant multipliers when simplifying runtime.',
+      'Master Theorem solves T(n) = aT(n/b) + f(n) by comparing f(n) with n^(log_b a).',
+      'Recursion trees sum the work per level multiplied by tree height.'
+    ],
+    formulaSheet: [
+      { label: 'Master Theorem Case 1', expression: 'f(n) = O(n^(log_b(a) - e)) => T(n) = Theta(n^log_b(a))', note: 'Leaf work dominates' },
+      { label: 'Master Theorem Case 2', expression: 'f(n) = Theta(n^log_b(a)) => T(n) = Theta(n^log_b(a) * log n)', note: 'All levels balanced' },
+      { label: 'Binary Search Recurrence', expression: 'T(n) = T(n/2) + O(1) => O(log n)', note: 'a = 1, b = 2' },
+      { label: 'Merge Sort Recurrence', expression: 'T(n) = 2T(n/2) + O(n) => O(n log n)', note: 'a = 2, b = 2' }
+    ],
+    examPitfalls: [
+      'Forgetting to check the regularity condition a * f(n/b) <= c * f(n) in Case 3.',
+      'Assuming O(n log n) is slower than O(n^2) for large n.',
+      'Using Master Theorem when subproblem sizes are unequal like T(n-1) + n.'
+    ],
+    memoryAnchor: 'Compare f(n) against n^(log_b a): smaller -> leaves win, equal -> multiply by log n, larger -> root wins.'
+  },
+  {
+    keys: ['stack', 'queue', 'linked', 'list', 'pointer'],
+    overview: 'Linear structures organize elements sequentially using contiguous arrays or pointer-linked nodes with O(1) ends access.',
+    coreConcepts: [
+      'Stacks follow LIFO (Last-In, First-Out) with push, pop, and peek in O(1).',
+      'Queues follow FIFO (First-In, First-Out) using circular array indices or front/rear pointers.',
+      'Singly linked lists insert at head in O(1) but require O(n) traversal for arbitrary index access.',
+      'Doubly linked lists store prev and next pointers to support O(1) deletion given a node reference.',
+      'Dummy sentinel nodes remove special-case checks for empty lists or head updates.'
+    ],
+    formulaSheet: [
+      { label: 'Circular Queue Next Index', expression: 'next = (index + 1) % capacity', note: 'Wraps around fixed array' },
+      { label: 'Circular Queue Size', expression: 'size = (rear - front + capacity) % capacity', note: 'Works with 1 empty slot' },
+      { label: 'Linked List Head Insert', expression: 'newNode.next = head; head = newNode;', note: 'O(1) time and O(1) space' },
+      { label: 'Two-Pointer Midpoint', expression: 'slow = slow.next; fast = fast.next.next;', note: 'Finds middle in one pass' }
+    ],
+    examPitfalls: [
+      'Losing the rest of a linked list by overwriting node.next before saving it.',
+      'Forgetting null checks on head, tail, or fast.next in two-pointer loops.',
+      'Popping an empty stack or dequeuing an empty queue without an underflow check.'
+    ],
+    memoryAnchor: 'Stacks = plate pile (LIFO); Queues = ticket line (FIFO); Linked lists = save next before rewiring.'
+  },
+  {
+    keys: ['bst', 'avl', 'heap', 'tree', 'rotation'],
+    overview: 'Trees store hierarchical keys for fast search, balanced height guarantees, and priority-ordered extraction.',
+    coreConcepts: [
+      'In a BST, every left descendant is smaller and every right descendant is larger than the node.',
+      'Inorder traversal of a BST always visits keys in sorted ascending order.',
+      'AVL trees maintain balance factor (height(left) - height(right)) within -1, 0, +1 using rotations.',
+      'Single LL/RR rotations fix straight imbalances; LR/RL double rotations fix zig-zag imbalances.',
+      'Binary min-heaps keep the smallest key at the root with O(log n) insert/extract and O(n) buildHeap.'
+    ],
+    formulaSheet: [
+      { label: 'Array Heap Children', expression: 'left = 2*i + 1, right = 2*i + 2', note: '0-based array indexing' },
+      { label: 'Array Heap Parent', expression: 'parent = Math.floor((i - 1) / 2)', note: 'For i > 0' },
+      { label: 'AVL Balance Factor', expression: 'BF(node) = height(left) - height(right)', note: 'Valid range: -1, 0, +1' },
+      { label: 'Build Heap Complexity', expression: 'Bottom-up heapify => O(n)', note: 'Tighter than n log n' }
+    ],
+    examPitfalls: [
+      'Confusing bottom-up buildHeap O(n) with n separate insertions O(n log n).',
+      'Deleting a 2-child BST node without replacing it with its inorder successor or predecessor.',
+      'Applying a single rotation instead of LR/RL double rotation on a zig-zag insertion.'
+    ],
+    memoryAnchor: 'BST = sorted inorder; AVL = |BF| <= 1; Heap = parent beats children, build bottom-up in O(n).'
+  },
+  {
+    keys: ['bfs', 'dfs', 'dijkstra', 'kruskal', 'graph', 'shortest', 'mst'],
+    overview: 'Graph algorithms explore vertices, find shortest paths, and build minimum-cost spanning trees across networks.',
+    coreConcepts: [
+      'BFS uses a queue to visit vertices level by level and finds shortest unweighted paths in O(V + E).',
+      'DFS uses recursion or a stack to explore deep paths and detects cycles and topological order.',
+      'Dijkstra greedily relaxes outgoing edges with a min-priority queue for non-negative edge weights.',
+      'Kruskal sorts edges by weight and adds edges using Disjoint Set (Union-Find) if they do not form a cycle.',
+      'A Minimum Spanning Tree on V connected vertices always contains exactly V - 1 edges.'
+    ],
+    formulaSheet: [
+      { label: 'BFS / DFS Runtime', expression: 'O(V + E)', note: 'Using adjacency lists' },
+      { label: 'Dijkstra (Binary Heap)', expression: 'O((V + E) log V)', note: 'Requires weights >= 0' },
+      { label: 'Kruskal MST Runtime', expression: 'O(E log E)', note: 'Dominated by edge sorting' },
+      { label: 'Edge Relaxation', expression: 'if (dist[u] + w < dist[v]) dist[v] = dist[u] + w;', note: 'Core shortest-path step' }
+    ],
+    examPitfalls: [
+      'Running Dijkstra on graphs with negative edge weights (use Bellman-Ford instead).',
+      'Forgetting to mark visited before pushing to the BFS queue, causing duplicate pushes.',
+      'Including an edge in Kruskal MST that connects two vertices already in the same component.'
+    ],
+    memoryAnchor: 'BFS = Queue + unweighted shortest; DFS = Stack + cycles; Dijkstra = >= 0 weights; Kruskal = sort + Union-Find.'
+  },
+  {
+    keys: ['quantifier', 'proof', 'logic', 'induction', 'relation', 'pigeonhole', 'inclusion', 'discrete'],
+    overview: 'Discrete proof tools formalize universal claims, equivalence partitions, inductive steps, and counting bounds.',
+    coreConcepts: [
+      'To disprove a universal statement (for all x, P(x)), one concrete counterexample suffices.',
+      'Contrapositive proof shows (not Q => not P), which is logically equivalent to (P => Q).',
+      'Equivalence relations are reflexive, symmetric, and transitive, partitioning a set into disjoint classes.',
+      'Strong induction assumes P(k) holds for all k <= n to prove P(n + 1).',
+      'Pigeonhole Principle guarantees at least one box holds >= ceil(N / K) items when placing N items into K boxes.'
+    ],
+    formulaSheet: [
+      { label: 'De Morgan Quantifiers', expression: '!(forall x P(x)) <=> exists x !P(x)', note: 'Flip quantifier and negate' },
+      { label: 'Inclusion-Exclusion (2 Sets)', expression: '|A U B| = |A| + |B| - |A & B|', note: 'Subtract overlap once' },
+      { label: 'Pigeonhole Bound', expression: 'Max box >= Math.ceil(N / K)', note: 'N items into K boxes' },
+      { label: 'Geometric Sum', expression: '1 + r + ... + r^n = (r^(n+1) - 1) / (r - 1)', note: 'r != 1' }
+    ],
+    examPitfalls: [
+      'Skipping the base case check when writing an induction proof.',
+      'Confusing converse (Q => P) with contrapositive (not Q => not P).',
+      'Forgetting transitivity verification when testing whether a relation is an equivalence relation.'
+    ],
+    memoryAnchor: 'Equivalence = R-S-T; Induction = Base + Leap; Contrapositive flips and negates both sides.'
+  }
+];
+
+var QUIZ_BANK = [
+  {
+    tags: ['big-o', 'recurrence', 'master', 'asymptotic', 'complexity'],
+    prompt: 'What is the time complexity of T(n) = 2T(n/2) + n using the Master Theorem?',
+    options: ['O(n)', 'O(n log n)', 'O(n^2)', 'O(log n)'],
+    correctIndex: 1,
+    explanation: 'Here a = 2, b = 2, so n^(log_2 2) = n, matching f(n) = n (Case 2), giving Theta(n log n).'
+  },
+  {
+    tags: ['big-o', 'recurrence', 'master', 'asymptotic', 'complexity'],
+    prompt: 'Which growth rate increases fastest as n becomes very large?',
+    options: ['O(n log n)', 'O(n^2)', 'O(2^n)', 'O(n^3)'],
+    correctIndex: 2,
+    explanation: 'Exponential growth 2^n eventually outgrows every polynomial n^k.'
+  },
+  {
+    tags: ['big-o', 'recurrence', 'master', 'asymptotic', 'complexity'],
+    prompt: 'Binary search on a sorted array of size n has which worst-case time complexity?',
+    options: ['O(1)', 'O(log n)', 'O(n)', 'O(n log n)'],
+    correctIndex: 1,
+    explanation: 'Each comparison halves the remaining search interval, matching T(n) = T(n/2) + O(1).'
+  },
+  {
+    tags: ['stack', 'queue', 'linked', 'list', 'pointer'],
+    prompt: 'In a circular array queue of length capacity, how do you advance an index by one position?',
+    options: ['index = index + 1', 'index = (index + 1) % capacity', 'index = index % (capacity - 1)', 'index = capacity - index'],
+    correctIndex: 1,
+    explanation: 'Taking modulo capacity wraps the index back to 0 when it reaches the end of the array.'
+  },
+  {
+    tags: ['stack', 'queue', 'linked', 'list', 'pointer'],
+    prompt: 'What is the time complexity to insert a new node at the head of a singly linked list?',
+    options: ['O(1)', 'O(log n)', 'O(n)', 'O(n log n)'],
+    correctIndex: 0,
+    explanation: 'Pointing newNode.next to head and updating head takes constant work regardless of list length.'
+  },
+  {
+    tags: ['stack', 'queue', 'linked', 'list', 'pointer'],
+    prompt: 'Which data structure processes elements in Last-In, First-Out (LIFO) order?',
+    options: ['Queue', 'Stack', 'Min-Heap', 'Hash Table'],
+    correctIndex: 1,
+    explanation: 'A stack pushes and pops from the same top end, following LIFO.'
+  },
+  {
+    tags: ['bst', 'avl', 'heap', 'tree', 'rotation'],
+    prompt: 'Which traversal of a Binary Search Tree visits all keys in sorted ascending order?',
+    options: ['Preorder', 'Inorder', 'Postorder', 'Level-order'],
+    correctIndex: 1,
+    explanation: 'Inorder visits Left -> Root -> Right, matching the BST ordering property.'
+  },
+  {
+    tags: ['bst', 'avl', 'heap', 'tree', 'rotation'],
+    prompt: 'In an array-backed 0-indexed binary heap, what is the left child index of node i?',
+    options: ['i + 1', '2 * i', '2 * i + 1', '2 * i + 2'],
+    correctIndex: 2,
+    explanation: 'With root at index 0, node i has children at 2*i + 1 and 2*i + 2.'
+  },
+  {
+    tags: ['bst', 'avl', 'heap', 'tree', 'rotation'],
+    prompt: 'What is the allowed range of balance factors (height(left) - height(right)) in an AVL tree?',
+    options: ['0 only', '-1, 0, or +1', '-2 to +2', 'Any positive integer'],
+    correctIndex: 1,
+    explanation: 'AVL trees trigger single or double rotations whenever |balance factor| exceeds 1.'
+  },
+  {
+    tags: ['bfs', 'dfs', 'dijkstra', 'kruskal', 'graph', 'shortest', 'mst'],
+    prompt: 'Which algorithm finds shortest paths from a single source in an unweighted graph?',
+    options: ['Depth-First Search', 'Breadth-First Search', 'Kruskal Algorithm', 'Topological Sort'],
+    correctIndex: 1,
+    explanation: 'BFS visits vertices in increasing order of edge distance from the start vertex.'
+  },
+  {
+    tags: ['bfs', 'dfs', 'dijkstra', 'kruskal', 'graph', 'shortest', 'mst'],
+    prompt: 'How many edges does a Minimum Spanning Tree of a connected graph with V vertices contain?',
+    options: ['V', 'V - 1', 'V + 1', 'E - V'],
+    correctIndex: 1,
+    explanation: 'Any tree spanning V vertices connects all nodes with no cycles using exactly V - 1 edges.'
+  },
+  {
+    tags: ['bfs', 'dfs', 'dijkstra', 'kruskal', 'graph', 'shortest', 'mst'],
+    prompt: 'Dijkstra shortest-path algorithm can produce wrong answers if the graph contains:',
+    options: ['Cycles', 'Disconnected nodes', 'Negative edge weights', 'Self-loops of weight 0'],
+    correctIndex: 2,
+    explanation: 'Dijkstra assumes finalized distances cannot decrease later, which fails with negative weights.'
+  },
+  {
+    tags: ['quantifier', 'proof', 'logic', 'induction', 'relation', 'pigeonhole', 'inclusion', 'discrete'],
+    prompt: 'Which three properties define an equivalence relation on a set?',
+    options: ['Reflexive, antisymmetric, transitive', 'Reflexive, symmetric, transitive', 'Symmetric, injective, surjective', 'Total, transitive, irreflexive'],
+    correctIndex: 1,
+    explanation: 'Equivalence relations are reflexive, symmetric, and transitive.'
+  },
+  {
+    tags: ['quantifier', 'proof', 'logic', 'induction', 'relation', 'pigeonhole', 'inclusion', 'discrete'],
+    prompt: 'If 25 students are placed into 4 tutorial groups, at least one group must have at least:',
+    options: ['5 students', '6 students', '7 students', '8 students'],
+    correctIndex: 2,
+    explanation: 'By the Pigeonhole Principle, ceil(25 / 4) = 7.'
+  },
+  {
+    tags: ['quantifier', 'proof', 'logic', 'induction', 'relation', 'pigeonhole', 'inclusion', 'discrete'],
+    prompt: 'What is the logical contrapositive of the implication "If P, then Q"?',
+    options: ['If Q, then P', 'If not P, then not Q', 'If not Q, then not P', 'P and not Q'],
+    correctIndex: 2,
+    explanation: 'Contrapositive negates and swaps both parts: (!Q => !P), equivalent to (P => Q).'
   }
 ];
 
@@ -131,28 +357,222 @@ function formatShortDate(dateText) {
   return MONTHS[d.getMonth()] + ' ' + d.getDate();
 }
 
-// 3. Single XMLHttpRequest Helper for AI Endpoints
-function callAi(url, bodyObj, onDone, onError) {
-  var xhr = new XMLHttpRequest();
-  xhr.open('POST', url, true);
-  xhr.setRequestHeader('Content-Type', 'application/json');
-  xhr.onreadystatechange = function () {
-    if (xhr.readyState !== 4) {
-      return;
+// 3. Offline Generators (100% Pure JavaScript)
+function cleanTopicLabel(rawLine) {
+  var line = trimText(rawLine);
+  line = line.replace(/^(unit|module|mod|chapter|ch|week|topic)\s*\d*\s*[:.-]\s*/i, '');
+  line = line.replace(/^(\d+[.)]|[-*])\s*/, '');
+  line = trimText(line);
+  if (line.length > 64) {
+    line = trimText(line.substring(0, 64));
+  }
+  return line;
+}
+
+function buildPlanFromSyllabus(title, examDate, hours, syllabusText) {
+  var rawLines = String(syllabusText || '').split('\n');
+  var topics = [];
+  for (var i = 0; i < rawLines.length; i += 1) {
+    var cleaned = cleanTopicLabel(rawLines[i]);
+    if (cleaned.length >= 2) {
+      topics.push(cleaned);
     }
-    var data = {};
-    try {
-      data = JSON.parse(xhr.responseText || '{}');
-    } catch (err) {
-      data = {};
+  }
+
+  if (topics.length === 1 && topics[0].indexOf(';') !== -1) {
+    var splitSemi = topics[0].split(';');
+    topics = [];
+    for (var s = 0; s < splitSemi.length; s += 1) {
+      var piece = cleanTopicLabel(splitSemi[s]);
+      if (piece.length >= 2) {
+        topics.push(piece);
+      }
     }
-    if (xhr.status >= 200 && xhr.status < 300) {
-      onDone(data);
-    } else {
-      onError(data.error || ('Request failed (' + xhr.status + ')'));
+  }
+
+  if (topics.length === 0) {
+    topics.push(title + ' Core Concepts');
+    topics.push(title + ' Problem Practice');
+  }
+  if (topics.length > 14) {
+    topics = topics.slice(0, 14);
+  }
+
+  var daysLeft = Math.max(getDaysLeft(examDate), 1);
+  var minsPerBlock = hours >= 4 ? 60 : (hours >= 2 ? 45 : 30);
+  var generatedTasks = [];
+
+  for (var t = 0; t < topics.length; t += 1) {
+    var dayOffset = Math.floor((t * daysLeft) / Math.max(topics.length, 1));
+    if (dayOffset >= daysLeft) {
+      dayOffset = daysLeft - 1;
     }
+    generatedTasks.push({
+      topicTitle: topics[t],
+      description: 'Review key concepts, trace examples, and solve practice problems for ' + topics[t] + '.',
+      scheduledDate: plusDays(dayOffset),
+      durationMinutes: minsPerBlock,
+      priority: t < 2 ? 'high' : 'medium'
+    });
+  }
+
+  generatedTasks.push({
+    topicTitle: 'Timed Full Mock Review',
+    description: 'Attempt a mixed timed practice quiz across all ' + topics.length + ' topics and review mistakes.',
+    scheduledDate: plusDays(Math.max(daysLeft - 1, 0)),
+    durationMinutes: 60,
+    priority: 'high'
+  });
+
+  var overview = topics.length + ' syllabus topics scheduled over ' + daysLeft + ' day(s) at ' + hours + 'h/day: ' + topics.slice(0, 4).join('; ') + '.';
+  return {
+    syllabusOverview: overview,
+    topics: topics,
+    tasks: generatedTasks
   };
-  xhr.send(JSON.stringify(bodyObj));
+}
+
+function findBankSheet(topicTitle) {
+  var lower = String(topicTitle || '').toLowerCase();
+  for (var i = 0; i < SHEET_BANK.length; i += 1) {
+    var keys = SHEET_BANK[i].keys;
+    for (var k = 0; k < keys.length; k += 1) {
+      if (lower.indexOf(keys[k]) !== -1) {
+        return SHEET_BANK[i];
+      }
+    }
+  }
+  return null;
+}
+
+function buildSummaryOffline(subjectTitle, topicTitle) {
+  var match = findBankSheet(topicTitle);
+  if (match) {
+    return match;
+  }
+  return {
+    overview: 'Focused revision sheet for ' + topicTitle + ' in ' + subjectTitle + '.',
+    coreConcepts: [
+      'State the core definition and purpose of ' + topicTitle + ' in your own words.',
+      'List the main rules, steps, or invariants required to solve ' + topicTitle + ' problems.',
+      'Trace one small concrete example from start to finish by hand.',
+      'Check boundary cases (empty input, size 1, maximum limits, or zero values).',
+      'Compare time, space, or logical trade-offs against alternative methods.'
+    ],
+    formulaSheet: [
+      { label: 'Step 1: Identify Inputs', expression: 'Input -> Constraint -> Target Output', note: 'Write given bounds first' },
+      { label: 'Step 2: Verify Edge Cases', expression: 'n = 0, n = 1, sorted / reverse / empty', note: 'Common exam test cases' }
+    ],
+    examPitfalls: [
+      'Jumping into calculations before verifying assumptions and preconditions.',
+      'Forgetting base cases, off-by-one indices, or unit conversions.',
+      'Skipping a quick sanity check on a tiny example.'
+    ],
+    memoryAnchor: 'Define it -> Trace n=3 by hand -> Check n=0/1 edge cases -> Verify final result.'
+  };
+}
+
+function hasAnyTag(tags, textLower) {
+  for (var i = 0; i < tags.length; i += 1) {
+    if (textLower.indexOf(tags[i]) !== -1) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function buildQuizOffline(sub, topicTitle, difficulty, count, weakTopics) {
+  var chosen = [];
+  var usedPrompts = [];
+  var targetLower = String(topicTitle || '').toLowerCase();
+  var weakLower = isList(weakTopics) ? weakTopics.join(' ').toLowerCase() : '';
+
+  for (var i = 0; i < QUIZ_BANK.length && chosen.length < count; i += 1) {
+    var q = QUIZ_BANK[i];
+    if ((weakLower && hasAnyTag(q.tags, weakLower)) || hasAnyTag(q.tags, targetLower)) {
+      chosen.push(q);
+      usedPrompts.push(q.prompt);
+    }
+  }
+
+  if (topicTitle === 'Comprehensive Mock' || chosen.length < count) {
+    var subjLower = (sub.title + ' ' + sub.topics.join(' ')).toLowerCase();
+    for (var j = 0; j < QUIZ_BANK.length && chosen.length < count; j += 1) {
+      var q2 = QUIZ_BANK[j];
+      if (usedPrompts.indexOf(q2.prompt) === -1 && hasAnyTag(q2.tags, subjLower)) {
+        chosen.push(q2);
+        usedPrompts.push(q2.prompt);
+      }
+    }
+  }
+
+  var topicPool = sub.topics.length > 0 ? sub.topics : [topicTitle];
+  var drillTemplates = [
+    {
+      stem: 'Which study check best verifies mastery of ',
+      opts: [
+        'Tracing a step-by-step example and testing edge cases by hand',
+        'Memorizing only the heading without solving any problems',
+        'Skipping boundary conditions like empty or single-item inputs',
+        'Assuming every case runs in constant O(1) time'
+      ],
+      ans: 0,
+      why: 'Hand-tracing examples and testing edge cases confirms real understanding of '
+    },
+    {
+      stem: 'When solving an exam question on ',
+      opts: [
+        'Ignore constraints and guess the final number',
+        'Check preconditions, base cases, and problem constraints first',
+        'Avoid writing intermediate steps',
+        'Test only the average case and skip edge inputs'
+      ],
+      ans: 1,
+      why: 'Checking preconditions and base cases prevents common errors in '
+    },
+    {
+      stem: 'Which mistake most frequently causes lost marks in ',
+      opts: [
+        'Writing clean labeled steps',
+        'Double-checking off-by-one bounds',
+        'Missing base cases, preconditions, or off-by-one errors',
+        'Verifying the answer on a small sample'
+      ],
+      ans: 2,
+      why: 'Boundary and precondition errors are the top source of lost marks in '
+    },
+    {
+      stem: 'If your first attempt at a problem on ',
+      opts: [
+        'Leave it blank without reviewing',
+        'Copy an unrelated formula',
+        'Skip straight to a harder chapter',
+        'Test a small concrete input (n = 2 or n = 3) to isolate where it diverges'
+      ],
+      ans: 3,
+      why: 'Testing a small input quickly reveals where logic diverges in '
+    }
+  ];
+
+  var extraIdx = 0;
+  while (chosen.length < count) {
+    var focusTopic = (topicTitle !== 'Comprehensive Mock' && extraIdx < drillTemplates.length)
+      ? topicTitle
+      : topicPool[extraIdx % topicPool.length];
+    var tpl = drillTemplates[extraIdx % drillTemplates.length];
+    var levelTag = difficulty === 'intensive' ? ' [Intensive #' + (extraIdx + 1) + ']' : ' [Check #' + (extraIdx + 1) + ']';
+    var promptText = tpl.stem + focusTopic + '?' + levelTag;
+
+    chosen.push({
+      prompt: promptText,
+      options: tpl.opts.slice(0),
+      correctIndex: tpl.ans,
+      explanation: tpl.why + focusTopic + '.'
+    });
+    extraIdx += 1;
+  }
+
+  return chosen;
 }
 
 // 4. Cookie Persistence (setCookie & getCookie from PDF)
@@ -417,16 +837,8 @@ function createSubject(title, examDate, hours, parsed) {
 }
 
 function loadSampleSubject() {
-  createSubject('Data Structures & Algorithms', plusDays(6), 3, {
-    syllabusOverview: '4 core units covering asymptotic analysis, linear structures, balanced trees, and graph algorithms.',
-    topics: ['Big-O & Recurrences', 'Stacks, Queues & Linked Lists', 'BSTs, AVL Trees & Heaps', 'BFS, DFS & Shortest Paths'],
-    tasks: [
-      { topicTitle: 'Big-O & Recurrences', description: 'Solve 8 Master Theorem and recursion tree problems.', scheduledDate: plusDays(1), durationMinutes: 60, priority: 'high' },
-      { topicTitle: 'Stacks, Queues & Linked Lists', description: 'Trace pointer reversal and circular queue edge cases.', scheduledDate: plusDays(2), durationMinutes: 45, priority: 'medium' },
-      { topicTitle: 'BSTs, AVL Trees & Heaps', description: 'Practice LL/LR rotations and bottom-up heapify.', scheduledDate: plusDays(3), durationMinutes: 60, priority: 'high' },
-      { topicTitle: 'BFS, DFS & Shortest Paths', description: 'Run Dijkstra and Kruskal dry runs on weighted graphs.', scheduledDate: plusDays(5), durationMinutes: 60, priority: 'high' }
-    ]
-  });
+  var samplePlan = buildPlanFromSyllabus(SAMPLES[0].title, plusDays(6), 3, SAMPLES[0].text);
+  createSubject(SAMPLES[0].title, plusDays(6), 3, samplePlan);
 }
 
 function toggleTask(taskId) {
@@ -1044,7 +1456,7 @@ function renderWorkspace() {
   }
 }
 
-// 7. Modal & AI Actions
+// 7. Modal & Offline Feature Actions
 function openModal(show) {
   showEl('add-subject-modal', show);
   if (show) {
@@ -1059,62 +1471,26 @@ function openModal(show) {
 
 function runSummary(topic) {
   var sub = getCurrentSubject();
-  var button = getEl('generate-summary-btn');
   if (!sub || !topic) {
+    showBanner('summary-error', 'Select or type a topic first.');
     return;
   }
-
-  button.disabled = true;
-  button.innerHTML = 'Generating...';
   showBanner('summary-error', '');
-
-  callAi('/api/ai/generate-summary', {
-    subjectTitle: sub.title,
-    topicTitle: topic,
-    syllabusContext: sub.syllabusOverview
-  }, function (result) {
-    button.disabled = false;
-    button.innerHTML = 'Make Study Sheet';
-    saveSummary(sub.id, topic, result);
-  }, function (errMsg) {
-    button.disabled = false;
-    button.innerHTML = 'Make Study Sheet';
-    showBanner('summary-error', errMsg);
-  });
+  var sheet = buildSummaryOffline(sub.title, topic);
+  saveSummary(sub.id, topic, sheet);
 }
 
 function runQuiz(topic, weakTopics) {
   var sub = getCurrentSubject();
-  var button = getEl('start-quiz-btn');
   var difficulty = getSelectValue('quiz-difficulty-select');
+  var count = Number(getSelectValue('quiz-count-select')) || 5;
   if (!sub || !topic) {
+    showBanner('quiz-error', 'Select a topic first.');
     return;
   }
-
-  button.disabled = true;
-  button.innerHTML = 'Building...';
   showBanner('quiz-error', '');
-
-  callAi('/api/ai/generate-quiz', {
-    subjectTitle: sub.title,
-    topicTitle: topic,
-    difficulty: difficulty,
-    questionCount: Number(getSelectValue('quiz-count-select')),
-    syllabusContext: sub.syllabusOverview,
-    focusWeaknesses: weakTopics || []
-  }, function (result) {
-    button.disabled = false;
-    button.innerHTML = 'Start Quiz';
-    if (!result.questions || result.questions.length === 0) {
-      showBanner('quiz-error', 'No questions returned.');
-      return;
-    }
-    saveQuiz(sub.id, topic, difficulty, result.questions);
-  }, function (errMsg) {
-    button.disabled = false;
-    button.innerHTML = 'Start Quiz';
-    showBanner('quiz-error', errMsg);
-  });
+  var questions = buildQuizOffline(sub, topic, difficulty, count, weakTopics || []);
+  saveQuiz(sub.id, topic, difficulty, questions);
 }
 
 // 8. Static Event Bindings & Startup
@@ -1237,28 +1613,9 @@ function bindStaticEvents() {
       return false;
     }
 
-    var button = getEl('submit-subject-btn');
-    button.disabled = true;
-    button.innerHTML = 'Generating...';
-    showBanner('modal-status', 'Reading syllabus...');
-
-    callAi('/api/ai/parse-syllabus', {
-      subjectTitle: title,
-      examDate: examDate,
-      dailyHours: hours,
-      currentDate: plusDays(0),
-      syllabusText: syllabusText
-    }, function (parsed) {
-      button.disabled = false;
-      button.innerHTML = 'Build Study Plan';
-      createSubject(title, examDate, hours, parsed);
-      openModal(false);
-    }, function (errMsg) {
-      button.disabled = false;
-      button.innerHTML = 'Build Study Plan';
-      showBanner('modal-status', '');
-      showBanner('modal-error', errMsg);
-    });
+    var parsed = buildPlanFromSyllabus(title, examDate, hours, syllabusText);
+    createSubject(title, examDate, hours, parsed);
+    openModal(false);
     return false;
   };
 }
