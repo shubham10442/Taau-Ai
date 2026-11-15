@@ -15,329 +15,134 @@
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
-    <!-- Top Header -->
     <header class="topbar">
       <div class="topbar-inner">
-        <a href="#top" id="brand-link" class="brand-wordmark">Taau Ai</a>
-
-        <nav id="landing-nav" class="nav-links" aria-label="Landing sections">
-          <a href="#walkthrough" class="nav-link">Walkthrough</a>
-          <a href="#workflow" class="nav-link">How I use it</a>
-          <a href="#limits" class="nav-link">Limits</a>
+        <a href="/" class="brand">Taau Ai</a>
+        <nav id="workspace-nav" class="nav nav-tabs">
+          <button type="button" class="tab is-active" data-tab="overview">Overview</button>
+          <button type="button" class="tab" data-tab="plan">Study Plan</button>
+          <button type="button" class="tab" data-tab="summaries">Summaries</button>
+          <button type="button" class="tab" data-tab="quizzes">Quizzes</button>
         </nav>
-
-        <nav id="workspace-nav" class="nav-links" aria-label="Study workspace navigation" hidden>
-          <button type="button" class="nav-tab is-active" data-tab="overview">Overview</button>
-          <button type="button" class="nav-tab" data-tab="plan">Study Plan</button>
-          <button type="button" class="nav-tab" data-tab="summaries">Summaries</button>
-          <button type="button" class="nav-tab" data-tab="quizzes">Quizzes</button>
-        </nav>
-
-        <button type="button" id="primary-action-btn" class="btn-primary">Sign In</button>
-      </div>
-
-      <div id="mobile-workspace-nav" class="mobile-tabs" hidden>
-        <button type="button" class="mobile-tab is-active" data-tab="overview">Overview</button>
-        <button type="button" class="mobile-tab" data-tab="plan">Study Plan</button>
-        <button type="button" class="mobile-tab" data-tab="summaries">Summaries</button>
-        <button type="button" class="mobile-tab" data-tab="quizzes">Quizzes</button>
+        <button type="button" id="primary-action-btn" class="btn primary">+ New Subject</button>
       </div>
     </header>
 
-    <div id="boot-loader" class="center-screen">
-      <p class="muted-text">Loading your study desk...</p>
-    </div>
-
-    <!-- Landing Page (Signed Out) -->
-    <main id="landing-view" class="landing-container" hidden>
-      <section id="top" class="hero-grid">
-        <div class="hero-copy">
-          <div class="stack-md">
-            <p class="meta-text">Built by a 1st-year CSE student for end-sem crunch week</p>
-            <h1 class="hero-title">Turn a messy course PDF into a realistic 6-day study plan.</h1>
-            <p class="hero-subtitle">
-              I built Taau Ai so I stop wasting two hours making timetables before midterms instead
-              of solving past papers. Drop in your syllabus, set your exam date, and get a plain
-              schedule, formula sheet, and practice quiz in one place.
-            </p>
-          </div>
-          <div class="stack-sm">
-            <div class="cta-row">
-              <button type="button" id="landing-signin-btn" class="btn-primary btn-lg">Sign in with Google &rarr;</button>
-              <a href="#workflow" class="btn-secondary btn-lg">See how it handles a real week</a>
-            </div>
-            <p id="auth-error-msg" class="alert-text" role="alert" hidden></p>
-            <p class="meta-text">Saves per-subject progress in Firebase · Accepts text, PDFs, or photos up to 10 MB</p>
-          </div>
-        </div>
-
-        <!-- Interactive 4-Step Walkthrough -->
-        <div id="walkthrough" class="hero-walkthrough card">
-          <div class="walkthrough-top">
-            <div class="segmented-control" role="tablist">
-              <button type="button" class="seg-btn wt-course-btn is-active" data-wt-course="dsa">CS101 · Data Structures</button>
-              <button type="button" class="seg-btn wt-course-btn" data-wt-course="discrete">MA102 · Discrete Math</button>
-            </div>
-            <span class="meta-text tabular-nums" id="wt-meta-tag">6 days left · 3h/day</span>
-          </div>
-
-          <div class="walkthrough-steps-bar">
-            <button type="button" class="wt-step-btn is-active" data-wt-step="0"><span class="mono-index">01</span> Syllabus</button>
-            <button type="button" class="wt-step-btn" data-wt-step="1"><span class="mono-index">02</span> Plan</button>
-            <button type="button" class="wt-step-btn" data-wt-step="2"><span class="mono-index">03</span> Sheet</button>
-            <button type="button" class="wt-step-btn" data-wt-step="3"><span class="mono-index">04</span> Quiz</button>
-          </div>
-
-          <div id="walkthrough-stage" class="walkthrough-stage"></div>
-        </div>
-      </section>
-
-      <section id="workflow" class="asymmetric-section">
-        <div class="workflow-column">
-          <div>
-            <p class="accent-label">How I use this before finals</p>
-            <h2 class="section-title">No magic shortcuts, just less friction before you start solving.</h2>
-          </div>
-          <div class="steps-list">
-            <div class="step-row">
-              <span class="mono-index is-lime">01.</span>
-              <div>
-                <h3>Paste the official unit list, not the textbook</h3>
-                <p>Upload the department syllabus PDF, a board photo, or rough bullets with your daily study hours.</p>
-              </div>
-            </div>
-            <div class="step-row">
-              <span class="mono-index is-amber">02.</span>
-              <div>
-                <h3>Heavy topics early, timed drills last</h3>
-                <p>Foundational theorems and code traces land on days 1 to 3; timed review sits in the final 48 hours.</p>
-              </div>
-            </div>
-            <div class="step-row">
-              <span class="mono-index">03.</span>
-              <div>
-                <h3>Drill the questions you actually missed</h3>
-                <p>Graded quiz mistakes feed straight into a focused weak-topic drill before exam morning.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <aside id="limits" class="constraints-card card">
-          <div class="card-header">
-            <h2 class="card-title">Honest Scope &amp; Ground Rules</h2>
-            <span class="meta-text">Read before cramming</span>
-          </div>
-          <div class="constraint-list">
-            <div class="constraint-item">
-              <span class="small-strong">Best for 1 to 14 day exam sprints</span>
-              <p class="muted-text">Built for midterms and end-sems, not year-long curriculum planning.</p>
-            </div>
-            <div class="constraint-item">
-              <span class="small-strong">Check formulas against class slides</span>
-              <p class="muted-text">AI sheets speed up recall, but always verify notation against your lecturer's rubric.</p>
-            </div>
-            <div class="constraint-item">
-              <span class="small-strong">10 MB cap on uploaded files</span>
-              <p class="muted-text">Upload the syllabus outline rather than a full textbook PDF.</p>
-            </div>
-          </div>
-        </aside>
-      </section>
-
-      <footer class="site-footer">
-        <span>Taau Ai · Exam Revision Workspace</span>
-        <span>Plain HTML, CSS, JavaScript, Firebase, and Gemini</span>
-      </footer>
-    </main>
-
-    <!-- Authenticated Workspace -->
-    <div id="workspace-view" class="workspace-shell" hidden>
+    <div id="workspace-view" class="workspace">
       <aside class="sidebar">
-        <div class="sidebar-top">
-          <div class="card-header">
-            <h2 class="sidebar-title">My Subjects (<span id="subject-count">0</span>)</h2>
-            <button type="button" id="sidebar-add-btn" class="circle-add-btn" aria-label="Add subject">+</button>
-          </div>
+        <div class="stack-md" style="padding:20px">
+          <div class="row between"><h2 class="sidebar-title">My Subjects (<span id="subject-count">0</span>)</h2><button type="button" id="sidebar-add-btn" class="circle-btn" aria-label="Add subject">+</button></div>
           <div id="subject-list" class="subject-list"></div>
         </div>
-
         <div class="sidebar-footer">
-          <div class="user-info">
-            <p id="user-display-name" class="user-name">Student</p>
-            <p id="user-email" class="user-email"></p>
-          </div>
-          <button type="button" id="signout-btn" class="btn-ghost-sm">Sign out</button>
+          <span class="meta">Saved locally in browser</span>
         </div>
       </aside>
 
       <main class="workspace-main">
-        <div id="mobile-user-strip" class="mobile-user-strip">
-          <span id="mobile-user-email" class="truncate"></span>
-          <button type="button" id="mobile-signout-btn" class="link-btn">Sign out</button>
-        </div>
-
-        <div id="sync-error-banner" class="error-banner" role="alert" hidden></div>
-
-        <section id="empty-subjects-state" class="empty-card" hidden>
-          <h1 class="section-title" id="welcome-heading">Ready to set up your first exam</h1>
-          <p class="muted-text max-w-prose">
-            Paste a course syllabus or upload a PDF/photo. I will split it into daily milestones,
-            topic formula sheets, and graded practice quizzes.
-          </p>
-          <button type="button" id="empty-add-subject-btn" class="btn-primary btn-lg">Add Your First Subject</button>
+        <section id="empty-subjects-state" class="card empty-card">
+          <h1 class="h2">Ready to set up your first exam</h1>
+          <p class="muted">Paste a course syllabus or upload a PDF/photo to get milestones, formula sheets, and graded quizzes.</p>
+          <div class="row wrap" style="justify-content:center">
+            <button type="button" id="empty-add-subject-btn" class="btn primary lg">Add Exam Subject</button>
+            <button type="button" id="load-sample-btn" class="btn secondary lg">Load CS101 Sample</button>
+          </div>
         </section>
 
         <div id="subject-workspace" class="stack-lg" hidden>
-          <div class="subject-header-row">
-            <div>
-              <h1 id="subject-title-heading" class="subject-title"></h1>
-              <p id="subject-meta-line" class="meta-text tabular-nums"></p>
-            </div>
-            <div class="readiness-box">
-              <div class="card-header">
-                <span class="meta-text">Overall Progress</span>
-                <span id="readiness-percent" class="mono-value tabular-nums">0%</span>
-              </div>
-              <div class="progress-track">
-                <div id="readiness-bar-fill" class="progress-fill" style="width: 0%"></div>
-              </div>
+          <div class="row between wrap">
+            <div><h1 id="subject-title-heading" class="subject-title"></h1><p id="subject-meta-line" class="meta"></p></div>
+            <div class="card compact readiness-box">
+              <div class="row between"><span class="meta">Progress</span><span id="readiness-percent" class="mono lime">0%</span></div>
+              <div class="track"><div id="readiness-bar-fill" class="fill"></div></div>
             </div>
           </div>
 
           <div class="kpi-strip">
-            <div class="kpi-cell">
-              <span class="meta-text">Days Left</span>
-              <span id="kpi-days" class="kpi-value tabular-nums">0d</span>
-            </div>
-            <div class="kpi-cell">
-              <span class="meta-text">Milestones Done</span>
-              <span id="kpi-milestones" class="kpi-value tabular-nums">0/0</span>
-            </div>
-            <div class="kpi-cell">
-              <span class="meta-text">Quiz Average</span>
-              <span id="kpi-quiz-avg" class="kpi-value tabular-nums">—</span>
-            </div>
+            <div class="card compact"><span class="meta">Days Left</span><span id="kpi-days" class="kpi">0d</span></div>
+            <div class="card compact"><span class="meta">Milestones Done</span><span id="kpi-milestones" class="kpi">0/0</span></div>
+            <div class="card compact"><span class="meta">Quiz Average</span><span id="kpi-quiz-avg" class="kpi">—</span></div>
           </div>
 
-          <!-- TAB 1: Overview -->
-          <section id="panel-overview" class="overview-grid">
-            <div class="overview-left">
+          <!-- 1. Overview -->
+          <section id="panel-overview" class="grid-12">
+            <div class="col-7 stack-md">
               <div class="card">
-                <div class="card-header">
-                  <h2 class="card-title">What Is on the Exam</h2>
-                  <span id="overview-sheets-count" class="meta-text tabular-nums"></span>
-                </div>
+                <div class="row between"><h2 class="h3">What Is on the Exam</h2><span id="overview-sheets-count" class="meta"></span></div>
                 <p id="overview-syllabus-text" class="body-copy"></p>
               </div>
-
-              <div class="card card-flush">
-                <div class="card-header padded">
-                  <h2 class="card-title">Topics Found in Syllabus</h2>
-                  <span class="meta-text">Jump to sheet or quiz</span>
-                </div>
+              <div class="card flush">
+                <div class="row between card-pad border-b"><h2 class="h3">Topics Found</h2><span class="meta">Jump to sheet or quiz</span></div>
                 <div id="overview-topics-list" class="divide-list"></div>
               </div>
             </div>
-
-            <div class="overview-right">
-              <div class="card card-flush">
-                <div class="card-header padded">
-                  <h2 class="card-title">Up Next</h2>
-                  <button type="button" id="jump-full-schedule-btn" class="link-btn">Full Schedule</button>
-                </div>
+            <div class="col-5 stack-md">
+              <div class="card flush">
+                <div class="row between card-pad border-b"><h2 class="h3">Up Next</h2><button type="button" id="jump-full-schedule-btn" class="link-btn">Full Schedule</button></div>
                 <div id="overview-next-tasks" class="divide-list"></div>
               </div>
-
-              <div class="danger-strip">
-                <div id="delete-prompt-default" class="card-header">
-                  <span class="meta-text">Done with this paper?</span>
-                  <button type="button" id="ask-delete-subject-btn" class="link-danger">Remove Subject</button>
-                </div>
-                <div id="delete-prompt-confirm" class="card-header" hidden>
-                  <span class="small-strong">Delete subject and all saved notes?</span>
-                  <div class="btn-group">
-                    <button type="button" id="cancel-delete-subject-btn" class="btn-secondary-sm">Cancel</button>
-                    <button type="button" id="confirm-delete-subject-btn" class="btn-danger-sm">Confirm Delete</button>
-                  </div>
+              <div class="card compact">
+                <div id="delete-prompt-default" class="row between"><span class="meta">Done with this paper?</span><button type="button" id="ask-delete-subject-btn" class="link-danger">Remove Subject</button></div>
+                <div id="delete-prompt-confirm" class="row between" hidden>
+                  <span class="small-strong">Delete subject &amp; data?</span>
+                  <div class="row"><button type="button" id="cancel-delete-subject-btn" class="btn secondary sm">Cancel</button><button type="button" id="confirm-delete-subject-btn" class="btn danger sm">Delete</button></div>
                 </div>
               </div>
             </div>
           </section>
 
-          <!-- TAB 2: Study Plan -->
+          <!-- 2. Study Plan -->
           <section id="panel-plan" hidden>
-            <div class="card card-flush">
-              <div class="toolbar-row">
-                <div class="segmented-control" id="plan-filter-group">
-                  <button type="button" class="seg-btn is-active" data-filter="all">All</button>
-                  <button type="button" class="seg-btn" data-filter="pending">Pending</button>
-                  <button type="button" class="seg-btn" data-filter="completed">Completed</button>
+            <div class="card flush">
+              <div class="row between wrap card-pad border-b">
+                <div class="seg-group" id="plan-filter-group">
+                  <button type="button" class="seg is-active" data-filter="all">All</button>
+                  <button type="button" class="seg" data-filter="pending">Pending</button>
+                  <button type="button" class="seg" data-filter="completed">Completed</button>
                 </div>
-                <button type="button" id="toggle-add-task-btn" class="btn-secondary-sm">+ Add Milestone</button>
+                <button type="button" id="toggle-add-task-btn" class="btn secondary sm">+ Add Milestone</button>
               </div>
-
               <form id="add-milestone-form" class="inline-form" hidden>
                 <div class="form-grid-4">
-                  <div class="field"><label for="milestone-topic">Topic</label><input id="milestone-topic" type="text" required placeholder="Topic name" /></div>
-                  <div class="field"><label for="milestone-date">Target Date</label><input id="milestone-date" type="date" required class="mono-input" /></div>
-                  <div class="field"><label for="milestone-duration">Minutes</label><input id="milestone-duration" type="number" min="10" max="240" value="45" class="mono-input" /></div>
-                  <div class="field">
-                    <label for="milestone-priority">Priority</label>
-                    <select id="milestone-priority"><option value="high">High</option><option value="medium">Medium</option><option value="normal">Normal</option></select>
-                  </div>
+                  <div class="field"><label for="milestone-topic">Topic</label><input id="milestone-topic" required placeholder="Topic name" /></div>
+                  <div class="field"><label for="milestone-date">Target Date</label><input id="milestone-date" type="date" required class="mono" /></div>
+                  <div class="field"><label for="milestone-duration">Minutes</label><input id="milestone-duration" type="number" min="10" max="240" value="45" class="mono" /></div>
+                  <div class="field"><label for="milestone-priority">Priority</label><select id="milestone-priority"><option value="high">High</option><option value="medium">Medium</option><option value="normal">Normal</option></select></div>
                 </div>
-                <div class="field"><label for="milestone-desc">What to Practice</label><input id="milestone-desc" type="text" required placeholder="e.g., Solve 10 past-paper problems and trace AVL rotations" /></div>
-                <div class="form-actions">
-                  <button type="button" id="cancel-add-task-btn" class="btn-secondary-sm">Cancel</button>
-                  <button type="submit" id="save-task-btn" class="btn-primary-sm">Save Milestone</button>
-                </div>
+                <div class="field"><label for="milestone-desc">What to Practice</label><input id="milestone-desc" required placeholder="e.g., Solve 10 past-paper problems" /></div>
+                <div class="row end"><button type="button" id="cancel-add-task-btn" class="btn secondary sm">Cancel</button><button type="submit" class="btn primary sm">Save Milestone</button></div>
               </form>
-
               <div id="plan-tasks-list" class="divide-list"></div>
             </div>
           </section>
 
-          <!-- TAB 3: Summaries -->
+          <!-- 3. Summaries -->
           <section id="panel-summaries" hidden>
-            <div class="section-toolbar">
-              <div>
-                <p class="meta-text">Double-check formulas against class slides</p>
-                <h2 class="section-title-sm">Topic Sheets &amp; Formulas</h2>
-              </div>
-              <div class="controls-row">
-                <select id="summary-topic-select" aria-label="Select topic"></select>
-                <input id="summary-custom-topic" type="text" placeholder="Enter custom topic" hidden />
-                <button type="button" id="generate-summary-btn" class="btn-primary">Make Study Sheet</button>
+            <div class="row between wrap" style="margin-bottom:18px">
+              <div><p class="meta">Double-check formulas against class slides</p><h2 class="h2">Topic Sheets &amp; Formulas</h2></div>
+              <div class="row wrap">
+                <select id="summary-topic-select" class="pill-select" aria-label="Select topic"></select>
+                <input id="summary-custom-topic" class="input" placeholder="Custom topic" hidden />
+                <button type="button" id="generate-summary-btn" class="btn primary">Make Study Sheet</button>
               </div>
             </div>
-            <p id="summary-error" class="error-banner" role="alert" hidden></p>
+            <p id="summary-error" class="banner error" role="alert" hidden></p>
             <div id="summaries-container"></div>
           </section>
 
-          <!-- TAB 4: Quizzes -->
+          <!-- 4. Quizzes -->
           <section id="panel-quizzes" hidden>
-            <div class="section-toolbar">
-              <div>
-                <p class="meta-text">Instant grading and step-by-step explanations</p>
-                <h2 class="section-title-sm">Practice Quizzes</h2>
-              </div>
-              <div class="controls-row">
-                <select id="quiz-topic-select" aria-label="Quiz topic"></select>
-                <select id="quiz-difficulty-select" aria-label="Quiz difficulty">
-                  <option value="standard">Standard</option>
-                  <option value="intensive">Intensive</option>
-                </select>
-                <select id="quiz-count-select" aria-label="Question count" class="mono-input">
-                  <option value="5">5 Questions</option>
-                  <option value="10">10 Questions</option>
-                  <option value="15">15 Questions</option>
-                </select>
-                <button type="button" id="start-quiz-btn" class="btn-primary">Start Quiz</button>
-                <button type="button" id="drill-weak-btn" class="btn-amber-outline" hidden>Drill Missed Questions</button>
+            <div class="row between wrap" style="margin-bottom:18px">
+              <div><p class="meta">Instant grading with step-by-step explanations</p><h2 class="h2">Practice Quizzes</h2></div>
+              <div class="row wrap">
+                <select id="quiz-topic-select" class="pill-select" aria-label="Quiz topic"></select>
+                <select id="quiz-difficulty-select" class="pill-select" aria-label="Difficulty"><option value="standard">Standard</option><option value="intensive">Intensive</option></select>
+                <select id="quiz-count-select" class="pill-select mono" aria-label="Count"><option value="5">5 Qs</option><option value="10">10 Qs</option><option value="15">15 Qs</option></select>
+                <button type="button" id="start-quiz-btn" class="btn primary">Start Quiz</button>
+                <button type="button" id="drill-weak-btn" class="btn amber-btn" hidden>Drill Missed</button>
               </div>
             </div>
-            <p id="quiz-error" class="error-banner" role="alert" hidden></p>
+            <p id="quiz-error" class="banner error" role="alert" hidden></p>
             <div id="quizzes-container"></div>
           </section>
         </div>
@@ -345,56 +150,32 @@
     </div>
 
     <!-- Add Subject Modal -->
-    <div id="add-subject-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
-      <div class="modal-dialog">
-        <div class="modal-header">
-          <div>
-            <h2 id="modal-title" class="card-title">Add Exam Subject</h2>
-            <p class="meta-text">Paste your syllabus or attach a PDF/photo (10 MB max).</p>
-          </div>
-          <button type="button" id="close-modal-btn" class="icon-btn" aria-label="Close modal">&times;</button>
+    <div id="add-subject-modal" class="modal-backdrop" role="dialog" aria-modal="true" hidden>
+      <div class="card flush modal-dialog">
+        <div class="row between card-pad border-b" style="background:var(--muted-bg)">
+          <div><h2 class="h3">Add Exam Subject</h2><p class="meta">Paste syllabus or attach a PDF/photo (10 MB max).</p></div>
+          <button type="button" id="close-modal-btn" class="circle-btn" aria-label="Close">&times;</button>
         </div>
-
-        <form id="add-subject-form" class="modal-body">
-          <div class="form-grid-subject">
-            <div class="field span-2"><label for="new-subject-title">Subject Name</label><input id="new-subject-title" type="text" maxlength="120" required placeholder="e.g., Data Structures & Algorithms" /></div>
-            <div class="field"><label for="new-subject-date">Exam Date</label><input id="new-subject-date" type="date" required class="mono-input" /></div>
-            <div class="field"><label for="new-subject-hours">Hours / Day</label><input id="new-subject-hours" type="number" min="0.5" max="14" step="0.5" value="3" class="mono-input" /></div>
+        <form id="add-subject-form" class="stack-md" style="padding:22px">
+          <div class="form-grid-4">
+            <div class="field span-2"><label for="new-subject-title">Subject Name</label><input id="new-subject-title" maxlength="120" required placeholder="e.g., Data Structures & Algorithms" /></div>
+            <div class="field"><label for="new-subject-date">Exam Date</label><input id="new-subject-date" type="date" required class="mono" /></div>
+            <div class="field"><label for="new-subject-hours">Hours / Day</label><input id="new-subject-hours" type="number" min="0.5" max="14" step="0.5" value="3" class="mono" /></div>
           </div>
-
           <div class="field">
-            <div class="card-header">
-              <label for="new-subject-syllabus">Syllabus Units or Topic List</label>
-              <div class="btn-group">
-                <span class="meta-text">Sample:</span>
-                <button type="button" class="link-btn sample-btn" data-sample="0">DSA</button>
-                <span class="sep">·</span>
-                <button type="button" class="link-btn sample-btn" data-sample="1">Discrete Math</button>
-                <span class="sep">·</span>
-                <button type="button" class="link-btn sample-btn" data-sample="2">Economics</button>
-              </div>
+            <div class="row between">
+              <label for="new-subject-syllabus">Syllabus Units</label>
+              <div class="row"><span class="meta">Sample:</span><button type="button" class="link-btn sample-btn" data-sample="0">DSA</button><span class="meta">·</span><button type="button" class="link-btn sample-btn" data-sample="1">Discrete Math</button></div>
             </div>
-            <textarea id="new-subject-syllabus" rows="5" placeholder="Paste units, chapter headings, or professor topics..."></textarea>
+            <textarea id="new-subject-syllabus" rows="4" placeholder="Paste units or topic bullets..."></textarea>
           </div>
-
-          <div class="field">
-            <label>Or Attach File (PDF, PNG, JPG, TXT, MD)</label>
-            <div class="file-drop-row">
-              <span id="uploaded-file-name" class="meta-text">No file attached (up to 10 MB)</span>
-              <div class="btn-group">
-                <button type="button" id="clear-file-btn" class="btn-secondary-sm" hidden>Remove</button>
-                <label class="file-picker-btn">Choose File<input id="syllabus-file-input" type="file" accept=".pdf,.txt,.md,image/png,image/jpeg,image/webp" hidden /></label>
-              </div>
-            </div>
+          <div class="file-drop">
+            <span id="uploaded-file-name" class="meta">No file attached (PDF/PNG/JPG/TXT, 10 MB max)</span>
+            <div class="row"><button type="button" id="clear-file-btn" class="btn secondary sm" hidden>Remove</button><label class="btn secondary sm">Choose File<input id="syllabus-file-input" type="file" accept=".pdf,.txt,.md,image/png,image/jpeg,image/webp" hidden /></label></div>
           </div>
-
-          <p id="modal-error" class="error-banner" role="alert" hidden></p>
-          <p id="modal-status" class="status-banner" hidden></p>
-
-          <div class="modal-footer">
-            <button type="button" id="cancel-modal-btn" class="btn-secondary">Cancel</button>
-            <button type="submit" id="submit-subject-btn" class="btn-primary">Build Study Plan</button>
-          </div>
+          <p id="modal-error" class="banner error" role="alert" hidden></p>
+          <p id="modal-status" class="banner ok" hidden></p>
+          <div class="row end border-t" style="padding-top:14px"><button type="button" id="cancel-modal-btn" class="btn secondary">Cancel</button><button type="submit" id="submit-subject-btn" class="btn primary">Build Study Plan</button></div>
         </form>
       </div>
     </div>
