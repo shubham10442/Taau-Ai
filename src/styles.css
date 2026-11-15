@@ -6,7 +6,7 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
-[hidden] { display: none !important; }
+.is-hidden { display: none !important; }
 html, body { margin: 0; background: var(--bg); color: var(--ink); font: 400 16px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
 h1, h2, h3, p { margin: 0; }
 h1, h2 { font-family: var(--display); text-wrap: balance; text-transform: uppercase; letter-spacing: 0.02em; color: #fff; }

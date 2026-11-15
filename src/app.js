@@ -1,43 +1,48 @@
-// 1. App Data, Samples & Storage Key
-var STORE_KEY = 'taau_ai_v1';
+// 1. App Data & Sample Syllabi
+var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 var SAMPLES = [
   {
     title: 'Data Structures & Algorithms',
-    text: 'Unit 1: Big-O, Recurrence Relations, Master Theorem\nUnit 2: Stacks, Queues, Linked Lists\nUnit 3: BSTs, AVL Rotations, Heaps\nUnit 4: BFS, DFS, Dijkstra, Kruskal MST',
+    text: 'Unit 1: Big-O, Recurrence Relations, Master Theorem\nUnit 2: Stacks, Queues, Linked Lists\nUnit 3: BSTs, AVL Rotations, Heaps\nUnit 4: BFS, DFS, Dijkstra, Kruskal MST'
   },
   {
     title: 'Discrete Mathematics',
-    text: 'Mod 1: Quantifiers & Proofs\nMod 2: Equivalence Relations\nMod 3: Strong Induction & Recurrences\nMod 4: Pigeonhole & Inclusion-Exclusion',
-  },
+    text: 'Mod 1: Quantifiers & Proofs\nMod 2: Equivalence Relations\nMod 3: Strong Induction & Recurrences\nMod 4: Pigeonhole & Inclusion-Exclusion'
+  }
 ];
 
-var state = {
-  subjects: [],
-  tasks: [],
-  summaries: [],
-  quizzes: [],
-  subId: null,
-  sumId: null,
-  quizId: null,
-  draft: [],
-  tab: 'overview',
-  filter: 'all',
-  fileData: null,
-};
+var subjects = [];
+var tasks = [];
+var summaries = [];
+var quizzes = [];
+var activeSubId = '';
+var activeSumId = '';
+var activeQuizId = '';
+var quizDraft = [];
+var activeTab = 'overview';
+var activeFilter = 'all';
 
-// 2. Simple DOM & Formatting Helpers
+// 2. Classic DOM, String & Date Helpers
 function getEl(id) {
   return document.getElementById(id);
 }
 
-function makeId(prefix) {
-  var randomPart = Math.random().toString(36).slice(2, 8);
-  return prefix + '_' + Date.now() + '_' + randomPart;
+function trimText(str) {
+  return String(str || '').replace(/^\s+|\s+$/g, '');
 }
 
-function escapeHtml(value) {
-  return String(value || '')
+function isList(val) {
+  return val && typeof val === 'object' && typeof val.length === 'number';
+}
+
+function makeId(prefix) {
+  var rand = Math.floor(Math.random() * 100000);
+  return prefix + '_' + new Date().getTime() + '_' + rand;
+}
+
+function escapeHtml(str) {
+  return String(str || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -45,117 +50,263 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function toggleClass(id, cls, active) {
+  var el = getEl(id);
+  var padded = ' ' + el.className + ' ';
+  var has = padded.indexOf(' ' + cls + ' ') !== -1;
+  if (active && !has) {
+    el.className = trimText(el.className + ' ' + cls);
+  } else if (!active && has) {
+    el.className = trimText(padded.replace(' ' + cls + ' ', ' '));
+  }
+}
+
+function showEl(id, show) {
+  toggleClass(id, 'is-hidden', !show);
+}
+
+function showBanner(id, message) {
+  var el = getEl(id);
+  if (message) {
+    el.innerHTML = escapeHtml(message);
+    showEl(id, true);
+  } else {
+    el.innerHTML = '';
+    showEl(id, false);
+  }
+}
+
+function getSelectValue(id) {
+  var sel = getEl(id);
+  if (sel.selectedIndex >= 0 && sel.options.length > 0) {
+    return sel.options[sel.selectedIndex].value;
+  }
+  return '';
+}
+
 function plusDays(days) {
-  var futureMs = Date.now() + days * 86400000;
-  return new Date(futureMs).toISOString().slice(0, 10);
+  var d = new Date();
+  d.setDate(d.getDate() + days);
+  var y = d.getFullYear();
+  var m = d.getMonth() + 1;
+  var day = d.getDate();
+  var mm = m < 10 ? '0' + m : '' + m;
+  var dd = day < 10 ? '0' + day : '' + day;
+  return y + '-' + mm + '-' + dd;
+}
+
+function parseYmd(dateText) {
+  var parts = String(dateText || '').split('-');
+  if (parts.length !== 3) {
+    return null;
+  }
+  var y = parseInt(parts[0], 10);
+  var m = parseInt(parts[1], 10) - 1;
+  var d = parseInt(parts[2], 10);
+  if (isNaN(y) || isNaN(m) || isNaN(d)) {
+    return null;
+  }
+  return new Date(y, m, d);
 }
 
 function getDaysLeft(dateText) {
-  var examMs = new Date(dateText + 'T00:00:00').getTime();
-  var todayMs = new Date().setHours(0, 0, 0, 0);
-  var diff = Math.ceil((examMs - todayMs) / 86400000);
-  if (isNaN(diff) || diff < 0) {
+  var exam = parseYmd(dateText);
+  if (!exam) {
+    return 0;
+  }
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  var diff = Math.ceil((exam.getTime() - today.getTime()) / 86400000);
+  if (diff < 0) {
     return 0;
   }
   return diff;
 }
 
 function formatShortDate(dateText) {
-  var parsed = Date.parse(dateText + 'T00:00:00');
-  if (isNaN(parsed)) {
+  var d = parseYmd(dateText);
+  if (!d) {
     return dateText || '';
   }
-  return new Date(parsed).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return MONTHS[d.getMonth()] + ' ' + d.getDate();
 }
 
-function showBanner(id, message) {
-  var element = getEl(id);
-  if (message) {
-    element.textContent = message;
-    element.hidden = false;
-  } else {
-    element.textContent = '';
-    element.hidden = true;
+// 3. Single XMLHttpRequest Helper for AI Endpoints
+function callAi(url, bodyObj, onDone, onError) {
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', url, true);
+  xhr.setRequestHeader('Content-Type', 'application/json');
+  xhr.onreadystatechange = function () {
+    if (xhr.readyState !== 4) {
+      return;
+    }
+    var data = {};
+    try {
+      data = JSON.parse(xhr.responseText || '{}');
+    } catch (err) {
+      data = {};
+    }
+    if (xhr.status >= 200 && xhr.status < 300) {
+      onDone(data);
+    } else {
+      onError(data.error || ('Request failed (' + xhr.status + ')'));
+    }
+  };
+  xhr.send(JSON.stringify(bodyObj));
+}
+
+// 4. Cookie Persistence (setCookie & getCookie from PDF)
+function setCookie(c_name, value, expiredays) {
+  var exdate = new Date();
+  exdate.setDate(exdate.getDate() + expiredays);
+  document.cookie = c_name + '=' + escape(value) + ((expiredays == null) ? '' : ';expires=' + exdate.toGMTString()) + ';path=/';
+}
+
+function getCookie(c_name) {
+  if (document.cookie.length > 0) {
+    var c_start = document.cookie.indexOf(c_name + '=');
+    if (c_start !== -1) {
+      c_start = c_start + c_name.length + 1;
+      var c_end = document.cookie.indexOf(';', c_start);
+      if (c_end === -1) {
+        c_end = document.cookie.length;
+      }
+      return unescape(document.cookie.substring(c_start, c_end));
+    }
   }
+  return '';
 }
 
-async function postJson(url, bodyData) {
-  var response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(bodyData),
-  });
-  var data = await response.json().catch(function () {
-    return {};
-  });
-  if (!response.ok) {
-    throw new Error(data.error || 'Request failed (' + response.status + ')');
+function cleanCookieText(val, maxLen) {
+  var clean = String(val || '').replace(/[\^\|\~\r\n]/g, ' ');
+  if (maxLen && clean.length > maxLen) {
+    return clean.substring(0, maxLen);
   }
-  return data;
+  return clean;
 }
 
-// 3. Browser LocalStorage Load & Save
 function saveState() {
-  try {
-    var payload = {
-      subjects: state.subjects,
-      tasks: state.tasks,
-      summaries: state.summaries,
-      quizzes: state.quizzes,
-      subId: state.subId,
-      tab: state.tab,
-    };
-    localStorage.setItem(STORE_KEY, JSON.stringify(payload));
-  } catch (err) {
-    // Ignore storage quota errors
+  setCookie('taau_meta', activeSubId + '|' + activeTab, 30);
+
+  var subRows = [];
+  for (var i = 0; i < subjects.length && i < 6; i += 1) {
+    var s = subjects[i];
+    var cleanTopics = [];
+    for (var t = 0; t < s.topics.length && t < 16; t += 1) {
+      cleanTopics.push(cleanCookieText(s.topics[t], 60));
+    }
+    var row = [
+      cleanCookieText(s.id, 40),
+      cleanCookieText(s.title, 80),
+      cleanCookieText(s.examDate, 12),
+      String(s.dailyHours),
+      cleanCookieText(s.syllabusOverview, 240),
+      cleanTopics.join('^')
+    ].join('|');
+    if ((subRows.join('~') + '~' + row).length <= 2600) {
+      subRows.push(row);
+    }
   }
+  setCookie('taau_subs', subRows.join('~'), 30);
+
+  var taskRows = [];
+  for (var j = 0; j < tasks.length && j < 45; j += 1) {
+    var tk = tasks[j];
+    var tRow = [
+      cleanCookieText(tk.id, 40),
+      cleanCookieText(tk.subjectId, 40),
+      cleanCookieText(tk.topicTitle, 55),
+      cleanCookieText(tk.description, 85),
+      cleanCookieText(tk.scheduledDate, 12),
+      String(tk.durationMinutes),
+      cleanCookieText(tk.priority, 10),
+      cleanCookieText(tk.status, 12),
+      String(tk.orderIndex)
+    ].join('|');
+    if ((taskRows.join('~') + '~' + tRow).length <= 2600) {
+      taskRows.push(tRow);
+    }
+  }
+  setCookie('taau_tasks', taskRows.join('~'), 30);
 }
 
 function loadState() {
-  try {
-    var raw = localStorage.getItem(STORE_KEY);
-    if (raw) {
-      var saved = JSON.parse(raw);
-      if (Array.isArray(saved.subjects)) state.subjects = saved.subjects;
-      if (Array.isArray(saved.tasks)) state.tasks = saved.tasks;
-      if (Array.isArray(saved.summaries)) state.summaries = saved.summaries;
-      if (Array.isArray(saved.quizzes)) state.quizzes = saved.quizzes;
-      if (typeof saved.subId === 'string') state.subId = saved.subId;
-      if (saved.tab === 'overview' || saved.tab === 'plan' || saved.tab === 'summaries' || saved.tab === 'quizzes') {
-        state.tab = saved.tab;
+  var metaRaw = getCookie('taau_meta');
+  if (metaRaw) {
+    var metaParts = metaRaw.split('|');
+    if (metaParts[0]) {
+      activeSubId = metaParts[0];
+    }
+    if (metaParts[1] === 'overview' || metaParts[1] === 'plan' || metaParts[1] === 'summaries' || metaParts[1] === 'quizzes') {
+      activeTab = metaParts[1];
+    }
+  }
+
+  var subsRaw = getCookie('taau_subs');
+  if (subsRaw) {
+    var subRows = subsRaw.split('~');
+    for (var i = 0; i < subRows.length; i += 1) {
+      var p = subRows[i].split('|');
+      if (p.length >= 6 && p[0]) {
+        var topicList = p[5] ? p[5].split('^') : [];
+        subjects.push({
+          id: p[0],
+          title: p[1],
+          examDate: p[2],
+          dailyHours: Number(p[3]) || 3,
+          syllabusOverview: p[4],
+          topics: topicList
+        });
       }
     }
-  } catch (err) {
-    // Ignore corrupted storage data
+  }
+
+  var tasksRaw = getCookie('taau_tasks');
+  if (tasksRaw) {
+    var taskRows = tasksRaw.split('~');
+    for (var j = 0; j < taskRows.length; j += 1) {
+      var q = taskRows[j].split('|');
+      if (q.length >= 9 && q[0]) {
+        tasks.push({
+          id: q[0],
+          subjectId: q[1],
+          topicTitle: q[2],
+          description: q[3],
+          scheduledDate: q[4],
+          durationMinutes: Number(q[5]) || 45,
+          priority: q[6] || 'medium',
+          status: q[7] === 'completed' ? 'completed' : 'pending',
+          orderIndex: Number(q[8]) || 0
+        });
+      }
+    }
   }
   syncActiveItems();
 }
 
-// 4. Filter Helpers for Active Subject
+// 5. Data Lookups & State Updates
 function getCurrentSubject() {
-  for (var i = 0; i < state.subjects.length; i += 1) {
-    if (state.subjects[i].id === state.subId) {
-      return state.subjects[i];
+  for (var i = 0; i < subjects.length; i += 1) {
+    if (subjects[i].id === activeSubId) {
+      return subjects[i];
     }
   }
-  if (state.subjects.length > 0) {
-    return state.subjects[0];
+  if (subjects.length > 0) {
+    return subjects[0];
   }
   return null;
 }
 
 function getSubjectTasks(subjectId) {
   var list = [];
-  for (var i = 0; i < state.tasks.length; i += 1) {
-    if (state.tasks[i].subjectId === subjectId) {
-      list.push(state.tasks[i]);
+  for (var i = 0; i < tasks.length; i += 1) {
+    if (tasks[i].subjectId === subjectId) {
+      list.push(tasks[i]);
     }
   }
   list.sort(function (a, b) {
-    var dateCompare = a.scheduledDate.localeCompare(b.scheduledDate);
-    if (dateCompare !== 0) {
-      return dateCompare;
-    }
+    if (a.scheduledDate < b.scheduledDate) return -1;
+    if (a.scheduledDate > b.scheduledDate) return 1;
     return a.orderIndex - b.orderIndex;
   });
   return list;
@@ -163,9 +314,9 @@ function getSubjectTasks(subjectId) {
 
 function getSubjectSummaries(subjectId) {
   var list = [];
-  for (var i = 0; i < state.summaries.length; i += 1) {
-    if (state.summaries[i].subjectId === subjectId) {
-      list.push(state.summaries[i]);
+  for (var i = 0; i < summaries.length; i += 1) {
+    if (summaries[i].subjectId === subjectId) {
+      list.push(summaries[i]);
     }
   }
   return list;
@@ -173,9 +324,9 @@ function getSubjectSummaries(subjectId) {
 
 function getSubjectQuizzes(subjectId) {
   var list = [];
-  for (var i = 0; i < state.quizzes.length; i += 1) {
-    if (state.quizzes[i].subjectId === subjectId) {
-      list.push(state.quizzes[i]);
+  for (var i = 0; i < quizzes.length; i += 1) {
+    if (quizzes[i].subjectId === subjectId) {
+      list.push(quizzes[i]);
     }
   }
   return list;
@@ -184,63 +335,62 @@ function getSubjectQuizzes(subjectId) {
 function syncActiveItems() {
   var sub = getCurrentSubject();
   if (!sub) {
-    state.subId = null;
-    state.sumId = null;
-    state.quizId = null;
-    state.draft = [];
+    activeSubId = '';
+    activeSumId = '';
+    activeQuizId = '';
+    quizDraft = [];
     return;
   }
 
-  state.subId = sub.id;
+  activeSubId = sub.id;
   var sums = getSubjectSummaries(sub.id);
   var foundSum = false;
   for (var i = 0; i < sums.length; i += 1) {
-    if (sums[i].id === state.sumId) {
+    if (sums[i].id === activeSumId) {
       foundSum = true;
     }
   }
   if (!foundSum) {
-    state.sumId = sums.length > 0 ? sums[0].id : null;
+    activeSumId = sums.length > 0 ? sums[0].id : '';
   }
 
   var quzs = getSubjectQuizzes(sub.id);
-  var activeQuiz = null;
+  var currentQuiz = null;
   for (var j = 0; j < quzs.length; j += 1) {
-    if (quzs[j].id === state.quizId) {
-      activeQuiz = quzs[j];
+    if (quzs[j].id === activeQuizId) {
+      currentQuiz = quzs[j];
     }
   }
-  if (!activeQuiz && quzs.length > 0) {
-    activeQuiz = quzs[0];
+  if (!currentQuiz && quzs.length > 0) {
+    currentQuiz = quzs[0];
   }
-  if (activeQuiz) {
-    state.quizId = activeQuiz.id;
-    state.draft = activeQuiz.userAnswers.slice();
+  if (currentQuiz) {
+    activeQuizId = currentQuiz.id;
+    quizDraft = currentQuiz.userAnswers.slice(0);
   } else {
-    state.quizId = null;
-    state.draft = [];
+    activeQuizId = '';
+    quizDraft = [];
   }
 }
 
-// 5. Data Mutations (Create, Update, Delete)
 function createSubject(title, examDate, hours, parsed) {
   var id = makeId('sub');
   var cleanHours = Number(hours) || 3;
   if (cleanHours < 0.5) cleanHours = 0.5;
 
-  state.subjects.push({
+  subjects.push({
     id: id,
     title: title || 'Subject',
     examDate: examDate || plusDays(6),
     dailyHours: cleanHours,
     syllabusOverview: parsed.syllabusOverview || 'Exam syllabus',
-    topics: Array.isArray(parsed.topics) ? parsed.topics.slice(0, 35) : [],
+    topics: isList(parsed.topics) ? parsed.topics.slice(0, 16) : []
   });
 
-  var parsedTasks = Array.isArray(parsed.tasks) ? parsed.tasks.slice(0, 30) : [];
+  var parsedTasks = isList(parsed.tasks) ? parsed.tasks.slice(0, 24) : [];
   for (var i = 0; i < parsedTasks.length; i += 1) {
     var item = parsedTasks[i];
-    state.tasks.push({
+    tasks.push({
       id: makeId('tsk'),
       subjectId: id,
       topicTitle: item.topicTitle || 'Revision',
@@ -249,15 +399,18 @@ function createSubject(title, examDate, hours, parsed) {
       durationMinutes: Number(item.durationMinutes) || 45,
       priority: item.priority || 'medium',
       status: 'pending',
-      orderIndex: i,
+      orderIndex: i
     });
   }
 
-  state.subjects.sort(function (a, b) {
-    return a.examDate.localeCompare(b.examDate);
+  subjects.sort(function (a, b) {
+    if (a.examDate < b.examDate) return -1;
+    if (a.examDate > b.examDate) return 1;
+    return 0;
   });
-  state.subId = id;
-  state.tab = 'overview';
+
+  activeSubId = id;
+  activeTab = 'overview';
   syncActiveItems();
   saveState();
   renderWorkspace();
@@ -271,18 +424,18 @@ function loadSampleSubject() {
       { topicTitle: 'Big-O & Recurrences', description: 'Solve 8 Master Theorem and recursion tree problems.', scheduledDate: plusDays(1), durationMinutes: 60, priority: 'high' },
       { topicTitle: 'Stacks, Queues & Linked Lists', description: 'Trace pointer reversal and circular queue edge cases.', scheduledDate: plusDays(2), durationMinutes: 45, priority: 'medium' },
       { topicTitle: 'BSTs, AVL Trees & Heaps', description: 'Practice LL/LR rotations and bottom-up heapify.', scheduledDate: plusDays(3), durationMinutes: 60, priority: 'high' },
-      { topicTitle: 'BFS, DFS & Shortest Paths', description: 'Run Dijkstra and Kruskal dry runs on weighted graphs.', scheduledDate: plusDays(5), durationMinutes: 60, priority: 'high' },
-    ],
+      { topicTitle: 'BFS, DFS & Shortest Paths', description: 'Run Dijkstra and Kruskal dry runs on weighted graphs.', scheduledDate: plusDays(5), durationMinutes: 60, priority: 'high' }
+    ]
   });
 }
 
 function toggleTask(taskId) {
-  for (var i = 0; i < state.tasks.length; i += 1) {
-    if (state.tasks[i].id === taskId) {
-      if (state.tasks[i].status === 'completed') {
-        state.tasks[i].status = 'pending';
+  for (var i = 0; i < tasks.length; i += 1) {
+    if (tasks[i].id === taskId) {
+      if (tasks[i].status === 'completed') {
+        tasks[i].status = 'pending';
       } else {
-        state.tasks[i].status = 'completed';
+        tasks[i].status = 'completed';
       }
       break;
     }
@@ -295,16 +448,16 @@ function addTask(subjectId, input) {
   var minutes = Number(input.mins) || 45;
   if (minutes < 10) minutes = 10;
 
-  state.tasks.push({
+  tasks.push({
     id: makeId('tsk'),
     subjectId: subjectId,
-    topicTitle: input.topic.trim() || 'Milestone',
-    description: input.desc.trim() || 'Focused practice',
+    topicTitle: trimText(input.topic) || 'Milestone',
+    description: trimText(input.desc) || 'Focused practice',
     scheduledDate: input.date || plusDays(6),
     durationMinutes: minutes,
     priority: input.pri || 'medium',
     status: 'pending',
-    orderIndex: getSubjectTasks(subjectId).length,
+    orderIndex: getSubjectTasks(subjectId).length
   });
   saveState();
   renderWorkspace();
@@ -312,18 +465,17 @@ function addTask(subjectId, input) {
 
 function saveSummary(subjectId, topic, data) {
   var id = makeId('sum');
-  state.summaries.unshift({
+  summaries.unshift({
     id: id,
     subjectId: subjectId,
     topicTitle: topic,
     overview: data.overview || 'Summary generated.',
-    coreConcepts: Array.isArray(data.coreConcepts) ? data.coreConcepts.slice(0, 15) : [],
-    formulaSheet: Array.isArray(data.formulaSheet) ? data.formulaSheet.slice(0, 15) : [],
-    examPitfalls: Array.isArray(data.examPitfalls) ? data.examPitfalls.slice(0, 12) : [],
-    memoryAnchor: data.memoryAnchor || '',
+    coreConcepts: isList(data.coreConcepts) ? data.coreConcepts.slice(0, 15) : [],
+    formulaSheet: isList(data.formulaSheet) ? data.formulaSheet.slice(0, 15) : [],
+    examPitfalls: isList(data.examPitfalls) ? data.examPitfalls.slice(0, 12) : [],
+    memoryAnchor: data.memoryAnchor || ''
   });
-  state.sumId = id;
-  saveState();
+  activeSumId = id;
   renderWorkspace();
 }
 
@@ -334,7 +486,7 @@ function saveQuiz(subjectId, topic, difficulty, rawQuestions) {
 
   for (var i = 0; i < limit; i += 1) {
     var q = rawQuestions[i];
-    var options = Array.isArray(q.options) ? q.options.slice(0, 4) : [];
+    var options = isList(q.options) ? q.options.slice(0, 4) : [];
     while (options.length < 4) {
       options.push('None of the above');
     }
@@ -346,7 +498,7 @@ function saveQuiz(subjectId, topic, difficulty, rawQuestions) {
       prompt: q.prompt,
       options: options,
       correctIndex: correct,
-      explanation: q.explanation || 'Review notes.',
+      explanation: q.explanation || 'Review notes.'
     });
   }
 
@@ -355,7 +507,7 @@ function saveQuiz(subjectId, topic, difficulty, rawQuestions) {
     blankAnswers.push(-1);
   }
 
-  state.quizzes.unshift({
+  quizzes.unshift({
     id: id,
     subjectId: subjectId,
     topicTitle: topic,
@@ -363,11 +515,10 @@ function saveQuiz(subjectId, topic, difficulty, rawQuestions) {
     questions: cleanQuestions,
     userAnswers: blankAnswers,
     scorePercent: -1,
-    status: 'in_progress',
+    status: 'in_progress'
   });
-  state.quizId = id;
-  state.draft = blankAnswers.slice();
-  saveState();
+  activeQuizId = id;
+  quizDraft = blankAnswers.slice(0);
   renderWorkspace();
 }
 
@@ -379,35 +530,135 @@ function gradeQuiz(quiz, answers) {
     }
   }
   var total = Math.max(quiz.questions.length, 1);
-  quiz.userAnswers = answers.slice();
+  quiz.userAnswers = answers.slice(0);
   quiz.scorePercent = Math.round((correctCount / total) * 100);
   quiz.status = 'completed';
-  saveState();
   renderWorkspace();
 }
 
 function removeSubject(subjectId) {
-  state.subjects = state.subjects.filter(function (s) { return s.id !== subjectId; });
-  state.tasks = state.tasks.filter(function (t) { return t.subjectId !== subjectId; });
-  state.summaries = state.summaries.filter(function (s) { return s.subjectId !== subjectId; });
-  state.quizzes = state.quizzes.filter(function (q) { return q.subjectId !== subjectId; });
-  state.subId = state.subjects.length > 0 ? state.subjects[0].id : null;
+  var nextSubjects = [];
+  for (var i = 0; i < subjects.length; i += 1) {
+    if (subjects[i].id !== subjectId) {
+      nextSubjects.push(subjects[i]);
+    }
+  }
+  subjects = nextSubjects;
+
+  var nextTasks = [];
+  for (var j = 0; j < tasks.length; j += 1) {
+    if (tasks[j].subjectId !== subjectId) {
+      nextTasks.push(tasks[j]);
+    }
+  }
+  tasks = nextTasks;
+
+  var nextSums = [];
+  for (var k = 0; k < summaries.length; k += 1) {
+    if (summaries[k].subjectId !== subjectId) {
+      nextSums.push(summaries[k]);
+    }
+  }
+  summaries = nextSums;
+
+  var nextQuzs = [];
+  for (var m = 0; m < quizzes.length; m += 1) {
+    if (quizzes[m].subjectId !== subjectId) {
+      nextQuzs.push(quizzes[m]);
+    }
+  }
+  quizzes = nextQuzs;
+
+  activeSubId = subjects.length > 0 ? subjects[0].id : '';
   syncActiveItems();
   saveState();
   renderWorkspace();
 }
 
-// 6. UI Rendering Functions
-function fillTopicSelect(selectId, subject, includeAllOption) {
+// 6. Dynamic Click Handlers & UI Rendering
+function onSubjectClick() {
+  var idx = parseInt(this.id.replace('sub-btn-', ''), 10);
+  if (subjects[idx]) {
+    activeSubId = subjects[idx].id;
+    syncActiveItems();
+    saveState();
+    renderWorkspace();
+  }
+}
+
+function onJumpSummaryClick() {
+  var idx = parseInt(this.id.replace('jump-sum-', ''), 10);
+  var sub = getCurrentSubject();
+  if (sub && sub.topics[idx]) {
+    activeTab = 'summaries';
+    saveState();
+    renderWorkspace();
+    getEl('summary-topic-select').value = sub.topics[idx];
+    runSummary(sub.topics[idx]);
+  }
+}
+
+function onJumpQuizClick() {
+  var idx = parseInt(this.id.replace('jump-quiz-', ''), 10);
+  var sub = getCurrentSubject();
+  if (sub && sub.topics[idx]) {
+    activeTab = 'quizzes';
+    saveState();
+    renderWorkspace();
+    getEl('quiz-topic-select').value = sub.topics[idx];
+    runQuiz(sub.topics[idx], []);
+  }
+}
+
+function onTaskToggleClick() {
+  var taskId = this.id.replace('next-tsk__', '').replace('plan-tsk__', '');
+  toggleTask(taskId);
+}
+
+function onSummarySelectClick() {
+  activeSumId = this.id.replace('sum-item__', '');
+  renderWorkspace();
+}
+
+function onQuizSelectClick() {
+  var id = this.id.replace('quiz-item__', '');
+  for (var i = 0; i < quizzes.length; i += 1) {
+    if (quizzes[i].id === id) {
+      activeQuizId = quizzes[i].id;
+      quizDraft = quizzes[i].userAnswers.slice(0);
+      renderWorkspace();
+      break;
+    }
+  }
+}
+
+function onQuizOptionClick() {
+  var parts = this.id.split('_');
+  var qi = parseInt(parts[1], 10);
+  var oi = parseInt(parts[2], 10);
+  quizDraft[qi] = oi;
+  renderWorkspace();
+}
+
+function onSubmitQuizClick() {
+  for (var i = 0; i < quizzes.length; i += 1) {
+    if (quizzes[i].id === activeQuizId) {
+      gradeQuiz(quizzes[i], quizDraft);
+      break;
+    }
+  }
+}
+
+function fillTopicSelect(selectId, sub, includeAllOption) {
   var select = getEl(selectId);
-  var previous = select.value;
+  var previous = getSelectValue(selectId);
   var html = '';
 
   if (includeAllOption) {
     html += '<option value="Comprehensive Mock">All Topics (Mock)</option>';
   }
-  for (var i = 0; i < subject.topics.length; i += 1) {
-    var topic = escapeHtml(subject.topics[i]);
+  for (var i = 0; i < sub.topics.length; i += 1) {
+    var topic = escapeHtml(sub.topics[i]);
     html += '<option value="' + topic + '">' + topic + '</option>';
   }
   if (!includeAllOption) {
@@ -417,114 +668,142 @@ function fillTopicSelect(selectId, subject, includeAllOption) {
   select.innerHTML = html;
   for (var j = 0; j < select.options.length; j += 1) {
     if (select.options[j].value === previous) {
-      select.value = previous;
+      select.options[j].selected = true;
       break;
     }
   }
 }
 
-function getQuizAverageText(quizzes) {
+function getQuizAverageText(subQuizzes) {
   var totalScore = 0;
   var count = 0;
-  for (var i = 0; i < quizzes.length; i += 1) {
-    if (quizzes[i].status === 'completed' && quizzes[i].scorePercent >= 0) {
-      totalScore += quizzes[i].scorePercent;
+  for (var i = 0; i < subQuizzes.length; i += 1) {
+    if (subQuizzes[i].status === 'completed' && subQuizzes[i].scorePercent >= 0) {
+      totalScore += subQuizzes[i].scorePercent;
       count += 1;
     }
   }
   if (count === 0) {
-    return null;
+    return '';
   }
   return Math.round(totalScore / count) + '%';
 }
 
-function renderSidebar(activeSubject) {
-  getEl('subject-count').textContent = String(state.subjects.length);
+function getMissedQuizTopics(subQuizzes) {
+  var topics = [];
+  for (var i = 0; i < subQuizzes.length; i += 1) {
+    var quiz = subQuizzes[i];
+    if (quiz.status !== 'completed') {
+      continue;
+    }
+    for (var j = 0; j < quiz.questions.length; j += 1) {
+      if (quiz.userAnswers[j] !== quiz.questions[j].correctIndex) {
+        if (topics.indexOf(quiz.topicTitle) === -1) {
+          topics.push(quiz.topicTitle);
+        }
+        break;
+      }
+    }
+  }
+  return topics;
+}
 
-  if (state.subjects.length === 0) {
+function renderSidebar(activeSubject) {
+  getEl('subject-count').innerHTML = String(subjects.length);
+
+  if (subjects.length === 0) {
     getEl('subject-list').innerHTML = '<p class="meta">No subjects yet.</p>';
     return;
   }
 
   var html = '';
-  for (var i = 0; i < state.subjects.length; i += 1) {
-    var sub = state.subjects[i];
-    var tasks = getSubjectTasks(sub.id);
+  var percents = [];
+  for (var i = 0; i < subjects.length; i += 1) {
+    var sub = subjects[i];
+    var subTasks = getSubjectTasks(sub.id);
     var doneCount = 0;
-    for (var j = 0; j < tasks.length; j += 1) {
-      if (tasks[j].status === 'completed') {
+    for (var j = 0; j < subTasks.length; j += 1) {
+      if (subTasks[j].status === 'completed') {
         doneCount += 1;
       }
     }
-    var percent = tasks.length > 0 ? Math.round((doneCount / tasks.length) * 100) : 0;
+    var percent = subTasks.length > 0 ? Math.round((doneCount / subTasks.length) * 100) : 0;
+    percents.push(percent);
+
     var avg = getQuizAverageText(getSubjectQuizzes(sub.id)) || 'no quiz';
     var left = getDaysLeft(sub.examDate);
     var dayColor = left <= 3 ? 'amber' : 'lime';
     var selectedClass = activeSubject && activeSubject.id === sub.id ? 'is-selected' : '';
 
-    html += '<button type="button" class="subject-item ' + selectedClass + '" data-select-subject="' + escapeHtml(sub.id) + '">';
+    html += '<button type="button" id="sub-btn-' + i + '" class="subject-item ' + selectedClass + '">';
     html += '<div class="row between"><span class="small-strong truncate">' + escapeHtml(sub.title) + '</span><span class="mono ' + dayColor + '">' + left + 'd</span></div>';
-    html += '<div class="track"><div class="fill" data-progress="' + percent + '"></div></div>';
-    html += '<div class="row between meta mono"><span>' + doneCount + '/' + tasks.length + '</span><span>' + avg + '</span></div>';
+    html += '<div class="track"><div id="sub-fill-' + i + '" class="fill"></div></div>';
+    html += '<div class="row between meta mono"><span>' + doneCount + '/' + subTasks.length + '</span><span>' + avg + '</span></div>';
     html += '</button>';
   }
 
   getEl('subject-list').innerHTML = html;
-  var fills = getEl('subject-list').querySelectorAll('.fill');
-  for (var k = 0; k < fills.length; k += 1) {
-    fills[k].style.width = fills[k].dataset.progress + '%';
+  for (var k = 0; k < subjects.length; k += 1) {
+    getEl('sub-fill-' + k).style.width = percents[k] + '%';
+    getEl('sub-btn-' + k).onclick = onSubjectClick;
   }
 }
 
-function renderOverview(sub, tasks, summaries) {
-  getEl('overview-syllabus-text').textContent = sub.syllabusOverview || 'No overview.';
-  getEl('overview-sheets-count').textContent = summaries.length + ' sheets';
+function renderOverview(sub, subTasks, subSums) {
+  getEl('overview-syllabus-text').innerHTML = escapeHtml(sub.syllabusOverview || 'No overview.');
+  getEl('overview-sheets-count').innerHTML = subSums.length + ' sheets';
 
   if (sub.topics.length === 0) {
     getEl('overview-topics-list').innerHTML = '<p class="muted card-pad">No topics.</p>';
   } else {
     var topicsHtml = '';
     for (var i = 0; i < sub.topics.length; i += 1) {
-      var num = String(i + 1).padStart(2, '0');
+      var num = (i + 1) < 10 ? '0' + (i + 1) : String(i + 1);
       var topic = escapeHtml(sub.topics[i]);
       topicsHtml += '<div class="list-row"><span class="truncate small-strong"><span class="mono muted">' + num + '</span> ' + topic + '</span>';
-      topicsHtml += '<div class="row"><button type="button" class="link-btn" data-jump-sum="' + topic + '">Sheet</button><span class="meta">·</span><button type="button" class="link-btn amber" data-jump-quiz="' + topic + '">Quiz</button></div></div>';
+      topicsHtml += '<div class="row"><button type="button" id="jump-sum-' + i + '" class="link-btn">Sheet</button><span class="meta">&middot;</span><button type="button" id="jump-quiz-' + i + '" class="link-btn amber">Quiz</button></div></div>';
     }
     getEl('overview-topics-list').innerHTML = topicsHtml;
-  }
-
-  var pendingTasks = [];
-  for (var j = 0; j < tasks.length; j += 1) {
-    if (tasks[j].status === 'pending' && pendingTasks.length < 5) {
-      pendingTasks.push(tasks[j]);
+    for (var ti = 0; ti < sub.topics.length; ti += 1) {
+      getEl('jump-sum-' + ti).onclick = onJumpSummaryClick;
+      getEl('jump-quiz-' + ti).onclick = onJumpQuizClick;
     }
   }
 
-  if (pendingTasks.length === 0) {
+  var pending = [];
+  for (var j = 0; j < subTasks.length; j += 1) {
+    if (subTasks[j].status === 'pending' && pending.length < 5) {
+      pending.push(subTasks[j]);
+    }
+  }
+
+  if (pending.length === 0) {
     getEl('overview-next-tasks').innerHTML = '<p class="muted card-pad">All milestones done.</p>';
   } else {
     var nextHtml = '';
-    for (var k = 0; k < pendingTasks.length; k += 1) {
-      var task = pendingTasks[k];
+    for (var k = 0; k < pending.length; k += 1) {
+      var task = pending[k];
       nextHtml += '<div class="list-row"><div class="row">';
-      nextHtml += '<button type="button" class="check-btn" data-toggle-task="' + escapeHtml(task.id) + '" aria-label="Mark done"></button>';
-      nextHtml += '<div><p class="small-strong">' + escapeHtml(task.topicTitle) + '</p><p class="meta">' + formatShortDate(task.scheduledDate) + ' · ' + task.durationMinutes + 'm</p></div>';
+      nextHtml += '<button type="button" id="next-tsk__' + escapeHtml(task.id) + '" class="check-btn" aria-label="Mark done"></button>';
+      nextHtml += '<div><p class="small-strong">' + escapeHtml(task.topicTitle) + '</p><p class="meta">' + formatShortDate(task.scheduledDate) + ' &middot; ' + task.durationMinutes + 'm</p></div>';
       nextHtml += '</div></div>';
     }
     getEl('overview-next-tasks').innerHTML = nextHtml;
+    for (var p = 0; p < pending.length; p += 1) {
+      getEl('next-tsk__' + pending[p].id).onclick = onTaskToggleClick;
+    }
   }
 }
 
-function renderPlan(tasks) {
-  var filterButtons = document.querySelectorAll('#plan-filter-group .seg');
-  for (var i = 0; i < filterButtons.length; i += 1) {
-    filterButtons[i].classList.toggle('is-active', filterButtons[i].dataset.filter === state.filter);
-  }
+function renderPlan(subTasks) {
+  toggleClass('filter-all', 'is-active', activeFilter === 'all');
+  toggleClass('filter-pending', 'is-active', activeFilter === 'pending');
+  toggleClass('filter-completed', 'is-active', activeFilter === 'completed');
 
   var filtered = [];
-  for (var j = 0; j < tasks.length; j += 1) {
-    if (state.filter === 'all' || tasks[j].status === state.filter) {
-      filtered.push(tasks[j]);
+  for (var i = 0; i < subTasks.length; i += 1) {
+    if (activeFilter === 'all' || subTasks[i].status === activeFilter) {
+      filtered.push(subTasks[i]);
     }
   }
 
@@ -542,35 +821,39 @@ function renderPlan(tasks) {
     var titleClass = isDone ? 'small-strong is-done-text' : 'small-strong';
 
     html += '<div class="list-row"><div class="row align-start">';
-    html += '<button type="button" class="' + checkClass + '" data-toggle-task="' + escapeHtml(task.id) + '">' + checkMark + '</button>';
+    html += '<button type="button" id="plan-tsk__' + escapeHtml(task.id) + '" class="' + checkClass + '">' + checkMark + '</button>';
     html += '<div><p class="' + titleClass + '">' + escapeHtml(task.topicTitle) + '</p><p class="muted">' + escapeHtml(task.description) + '</p></div>';
-    html += '</div><span class="meta mono">' + escapeHtml(task.priority) + ' · ' + formatShortDate(task.scheduledDate) + ' · ' + task.durationMinutes + 'm</span></div>';
+    html += '</div><span class="meta mono">' + escapeHtml(task.priority) + ' &middot; ' + formatShortDate(task.scheduledDate) + ' &middot; ' + task.durationMinutes + 'm</span></div>';
   }
   getEl('plan-tasks-list').innerHTML = html;
+
+  for (var j = 0; j < filtered.length; j += 1) {
+    getEl('plan-tsk__' + filtered[j].id).onclick = onTaskToggleClick;
+  }
 }
 
-function renderSummaries(sub, summaries) {
+function renderSummaries(sub, subSums) {
   fillTopicSelect('summary-topic-select', sub, false);
-  getEl('summary-custom-topic').hidden = getEl('summary-topic-select').value !== '__custom__';
+  showEl('summary-custom-topic', getSelectValue('summary-topic-select') === '__custom__');
 
-  if (summaries.length === 0) {
+  if (subSums.length === 0) {
     getEl('summaries-container').innerHTML = '<div class="card"><p class="muted">Pick a topic above and click Make Study Sheet.</p></div>';
     return;
   }
 
-  var current = summaries[0];
-  for (var i = 0; i < summaries.length; i += 1) {
-    if (summaries[i].id === state.sumId) {
-      current = summaries[i];
+  var current = subSums[0];
+  for (var i = 0; i < subSums.length; i += 1) {
+    if (subSums[i].id === activeSumId) {
+      current = subSums[i];
       break;
     }
   }
 
   var historyHtml = '';
-  for (var j = 0; j < summaries.length; j += 1) {
-    var item = summaries[j];
+  for (var j = 0; j < subSums.length; j += 1) {
+    var item = subSums[j];
     var cls = item.id === current.id ? 'history-item is-selected' : 'history-item';
-    historyHtml += '<button type="button" class="' + cls + '" data-sel-sum="' + escapeHtml(item.id) + '">';
+    historyHtml += '<button type="button" id="sum-item__' + escapeHtml(item.id) + '" class="' + cls + '">';
     historyHtml += '<span class="small-strong">' + escapeHtml(item.topicTitle) + '</span>';
     historyHtml += '<span class="meta">' + item.formulaSheet.length + ' formulas</span></button>';
   }
@@ -609,57 +892,43 @@ function renderSummaries(sub, summaries) {
   html += '</article></div>';
 
   getEl('summaries-container').innerHTML = html;
-}
-
-function getMissedQuizTopics(quizzes) {
-  var topics = [];
-  for (var i = 0; i < quizzes.length; i += 1) {
-    var quiz = quizzes[i];
-    if (quiz.status !== 'completed') continue;
-    for (var j = 0; j < quiz.questions.length; j += 1) {
-      if (quiz.userAnswers[j] !== quiz.questions[j].correctIndex) {
-        if (topics.indexOf(quiz.topicTitle) === -1) {
-          topics.push(quiz.topicTitle);
-        }
-        break;
-      }
-    }
+  for (var k = 0; k < subSums.length; k += 1) {
+    getEl('sum-item__' + subSums[k].id).onclick = onSummarySelectClick;
   }
-  return topics;
 }
 
-function renderQuizzes(sub, quizzes) {
+function renderQuizzes(sub, subQuizzes) {
   fillTopicSelect('quiz-topic-select', sub, true);
-  var weakTopics = getMissedQuizTopics(quizzes);
-  getEl('drill-weak-btn').hidden = weakTopics.length === 0;
+  var weakTopics = getMissedQuizTopics(subQuizzes);
+  showEl('drill-weak-btn', weakTopics.length > 0);
 
-  if (quizzes.length === 0) {
+  if (subQuizzes.length === 0) {
     getEl('quizzes-container').innerHTML = '<div class="card"><p class="muted">Pick a topic and click Start Quiz.</p></div>';
     return;
   }
 
-  var current = quizzes[0];
-  for (var i = 0; i < quizzes.length; i += 1) {
-    if (quizzes[i].id === state.quizId) {
-      current = quizzes[i];
+  var current = subQuizzes[0];
+  for (var i = 0; i < subQuizzes.length; i += 1) {
+    if (subQuizzes[i].id === activeQuizId) {
+      current = subQuizzes[i];
       break;
     }
   }
 
   var historyHtml = '';
-  for (var j = 0; j < quizzes.length; j += 1) {
-    var item = quizzes[j];
+  for (var j = 0; j < subQuizzes.length; j += 1) {
+    var item = subQuizzes[j];
     var cls = item.id === current.id ? 'history-item is-selected' : 'history-item';
     var statusLabel = item.status === 'completed' ? item.scorePercent + '%' : 'In progress';
-    historyHtml += '<button type="button" class="' + cls + '" data-sel-quiz="' + escapeHtml(item.id) + '">';
+    historyHtml += '<button type="button" id="quiz-item__' + escapeHtml(item.id) + '" class="' + cls + '">';
     historyHtml += '<span class="small-strong">' + escapeHtml(item.topicTitle) + '</span>';
-    historyHtml += '<span class="meta">' + statusLabel + ' · ' + item.questions.length + ' Qs</span></button>';
+    historyHtml += '<span class="meta">' + statusLabel + ' &middot; ' + item.questions.length + ' Qs</span></button>';
   }
 
   var isDone = current.status === 'completed';
   var allAnswered = true;
   for (var a = 0; a < current.questions.length; a += 1) {
-    if (state.draft[a] === undefined || state.draft[a] < 0) {
+    if (quizDraft[a] === undefined || quizDraft[a] < 0) {
       allAnswered = false;
       break;
     }
@@ -668,7 +937,7 @@ function renderQuizzes(sub, quizzes) {
   var questionsHtml = '';
   for (var qi = 0; qi < current.questions.length; qi += 1) {
     var q = current.questions[qi];
-    var picked = isDone ? current.userAnswers[qi] : state.draft[qi];
+    var picked = isDone ? current.userAnswers[qi] : quizDraft[qi];
     questionsHtml += '<div class="stack-sm divider-top"><p class="small-strong"><span class="mono">Q' + (qi + 1) + '.</span> ' + escapeHtml(q.prompt) + '</p>';
 
     for (var oi = 0; oi < q.options.length; oi += 1) {
@@ -681,8 +950,8 @@ function renderQuizzes(sub, quizzes) {
       }
 
       var letter = String.fromCharCode(65 + oi);
-      var attrs = isDone ? 'disabled' : 'data-qq="' + qi + '" data-qo="' + oi + '"';
-      questionsHtml += '<button type="button" class="' + optClass + '" ' + attrs + '><span class="mono">' + letter + '.</span><span>' + escapeHtml(q.options[oi]) + '</span></button>';
+      var optAttrs = isDone ? 'disabled' : 'id="qopt_' + qi + '_' + oi + '"';
+      questionsHtml += '<button type="button" class="' + optClass + '" ' + optAttrs + '><span class="mono">' + letter + '.</span><span>' + escapeHtml(q.options[oi]) + '</span></button>';
     }
 
     if (isDone) {
@@ -706,69 +975,78 @@ function renderQuizzes(sub, quizzes) {
   var html = '<div class="split">';
   html += '<div class="card flush">' + historyHtml + '</div>';
   html += '<div class="card">';
-  html += '<div class="row between"><div><h3 class="h2">' + escapeHtml(current.topicTitle) + '</h3><p class="meta">' + escapeHtml(current.difficulty) + ' · ' + current.questions.length + ' Qs</p></div>' + scoreHtml + '</div>';
+  html += '<div class="row between"><div><h3 class="h2">' + escapeHtml(current.topicTitle) + '</h3><p class="meta">' + escapeHtml(current.difficulty) + ' &middot; ' + current.questions.length + ' Qs</p></div>' + scoreHtml + '</div>';
   html += questionsHtml + footerHtml;
   html += '</div></div>';
 
   getEl('quizzes-container').innerHTML = html;
+
+  for (var hi = 0; hi < subQuizzes.length; hi += 1) {
+    getEl('quiz-item__' + subQuizzes[hi].id).onclick = onQuizSelectClick;
+  }
+  if (!isDone) {
+    for (var qIndex = 0; qIndex < current.questions.length; qIndex += 1) {
+      for (var oIndex = 0; oIndex < current.questions[qIndex].options.length; oIndex += 1) {
+        getEl('qopt_' + qIndex + '_' + oIndex).onclick = onQuizOptionClick;
+      }
+    }
+    getEl('submit-quiz-btn').onclick = onSubmitQuizClick;
+  }
 }
 
 function renderWorkspace() {
   var sub = getCurrentSubject();
   renderSidebar(sub);
 
-  getEl('empty-subjects-state').hidden = Boolean(sub);
-  getEl('subject-workspace').hidden = !sub;
+  showEl('empty-subjects-state', !sub);
+  showEl('subject-workspace', !!sub);
 
-  var tabs = document.querySelectorAll('.tab');
-  for (var i = 0; i < tabs.length; i += 1) {
-    tabs[i].disabled = !sub;
-    tabs[i].classList.toggle('is-active', tabs[i].dataset.tab === state.tab);
+  var tabNames = ['overview', 'plan', 'summaries', 'quizzes'];
+  for (var i = 0; i < tabNames.length; i += 1) {
+    var name = tabNames[i];
+    getEl('tab-' + name).disabled = !sub;
+    toggleClass('tab-' + name, 'is-active', activeTab === name);
+    showEl('panel-' + name, activeTab === name);
   }
 
   if (!sub) {
     return;
   }
 
-  var tasks = getSubjectTasks(sub.id);
-  var summaries = getSubjectSummaries(sub.id);
-  var quizzes = getSubjectQuizzes(sub.id);
+  var subTasks = getSubjectTasks(sub.id);
+  var subSums = getSubjectSummaries(sub.id);
+  var subQuizzes = getSubjectQuizzes(sub.id);
 
   var doneCount = 0;
-  for (var j = 0; j < tasks.length; j += 1) {
-    if (tasks[j].status === 'completed') {
+  for (var j = 0; j < subTasks.length; j += 1) {
+    if (subTasks[j].status === 'completed') {
       doneCount += 1;
     }
   }
-  var percent = tasks.length > 0 ? Math.round((doneCount / tasks.length) * 100) : 0;
+  var percent = subTasks.length > 0 ? Math.round((doneCount / subTasks.length) * 100) : 0;
 
-  getEl('subject-title-heading').textContent = sub.title;
-  getEl('subject-meta-line').textContent = 'Exam ' + formatShortDate(sub.examDate) + ' · ' + sub.dailyHours + 'h/day · ' + sub.topics.length + ' topics';
-  getEl('readiness-percent').textContent = percent + '%';
+  getEl('subject-title-heading').innerHTML = escapeHtml(sub.title);
+  getEl('subject-meta-line').innerHTML = 'Exam ' + formatShortDate(sub.examDate) + ' &middot; ' + sub.dailyHours + 'h/day &middot; ' + sub.topics.length + ' topics';
+  getEl('readiness-percent').innerHTML = percent + '%';
   getEl('readiness-bar-fill').style.width = percent + '%';
-  getEl('kpi-days').textContent = getDaysLeft(sub.examDate) + 'd';
-  getEl('kpi-milestones').textContent = doneCount + '/' + tasks.length;
-  getEl('kpi-quiz-avg').textContent = getQuizAverageText(quizzes) || '—';
+  getEl('kpi-days').innerHTML = getDaysLeft(sub.examDate) + 'd';
+  getEl('kpi-milestones').innerHTML = doneCount + '/' + subTasks.length;
+  getEl('kpi-quiz-avg').innerHTML = getQuizAverageText(subQuizzes) || '&mdash;';
 
-  var panelNames = ['overview', 'plan', 'summaries', 'quizzes'];
-  for (var p = 0; p < panelNames.length; p += 1) {
-    getEl('panel-' + panelNames[p]).hidden = state.tab !== panelNames[p];
-  }
-
-  if (state.tab === 'overview') {
-    renderOverview(sub, tasks, summaries);
-  } else if (state.tab === 'plan') {
-    renderPlan(tasks);
-  } else if (state.tab === 'summaries') {
-    renderSummaries(sub, summaries);
+  if (activeTab === 'overview') {
+    renderOverview(sub, subTasks, subSums);
+  } else if (activeTab === 'plan') {
+    renderPlan(subTasks);
+  } else if (activeTab === 'summaries') {
+    renderSummaries(sub, subSums);
   } else {
-    renderQuizzes(sub, quizzes);
+    renderQuizzes(sub, subQuizzes);
   }
 }
 
 // 7. Modal & AI Actions
 function openModal(show) {
-  getEl('add-subject-modal').hidden = !show;
+  showEl('add-subject-modal', show);
   if (show) {
     getEl('new-subject-date').value = plusDays(6);
     getEl('new-subject-title').focus();
@@ -776,297 +1054,215 @@ function openModal(show) {
     showBanner('modal-status', '');
   } else {
     getEl('add-subject-form').reset();
-    state.fileData = null;
-    getEl('uploaded-file-name').textContent = 'No file attached (PDF/PNG/JPG/TXT, 10 MB max)';
-    getEl('clear-file-btn').hidden = true;
   }
 }
 
-async function runSummary(topic) {
+function runSummary(topic) {
   var sub = getCurrentSubject();
   var button = getEl('generate-summary-btn');
-  if (!sub || !topic) return;
+  if (!sub || !topic) {
+    return;
+  }
 
   button.disabled = true;
-  button.textContent = 'Generating...';
+  button.innerHTML = 'Generating...';
   showBanner('summary-error', '');
-  try {
-    var result = await postJson('/api/ai/generate-summary', {
-      subjectTitle: sub.title,
-      topicTitle: topic,
-      syllabusContext: sub.syllabusOverview,
-    });
-    saveSummary(sub.id, topic, result);
-  } catch (err) {
-    showBanner('summary-error', err.message);
-  } finally {
+
+  callAi('/api/ai/generate-summary', {
+    subjectTitle: sub.title,
+    topicTitle: topic,
+    syllabusContext: sub.syllabusOverview
+  }, function (result) {
     button.disabled = false;
-    button.textContent = 'Make Study Sheet';
-  }
+    button.innerHTML = 'Make Study Sheet';
+    saveSummary(sub.id, topic, result);
+  }, function (errMsg) {
+    button.disabled = false;
+    button.innerHTML = 'Make Study Sheet';
+    showBanner('summary-error', errMsg);
+  });
 }
 
-async function runQuiz(topic, weakTopics) {
+function runQuiz(topic, weakTopics) {
   var sub = getCurrentSubject();
   var button = getEl('start-quiz-btn');
-  var difficulty = getEl('quiz-difficulty-select').value;
-  if (!sub || !topic) return;
+  var difficulty = getSelectValue('quiz-difficulty-select');
+  if (!sub || !topic) {
+    return;
+  }
 
   button.disabled = true;
-  button.textContent = 'Building...';
+  button.innerHTML = 'Building...';
   showBanner('quiz-error', '');
-  try {
-    var result = await postJson('/api/ai/generate-quiz', {
-      subjectTitle: sub.title,
-      topicTitle: topic,
-      difficulty: difficulty,
-      questionCount: Number(getEl('quiz-count-select').value),
-      syllabusContext: sub.syllabusOverview,
-      focusWeaknesses: weakTopics || [],
-    });
+
+  callAi('/api/ai/generate-quiz', {
+    subjectTitle: sub.title,
+    topicTitle: topic,
+    difficulty: difficulty,
+    questionCount: Number(getSelectValue('quiz-count-select')),
+    syllabusContext: sub.syllabusOverview,
+    focusWeaknesses: weakTopics || []
+  }, function (result) {
+    button.disabled = false;
+    button.innerHTML = 'Start Quiz';
     if (!result.questions || result.questions.length === 0) {
-      throw new Error('No questions returned.');
+      showBanner('quiz-error', 'No questions returned.');
+      return;
     }
     saveQuiz(sub.id, topic, difficulty, result.questions);
-  } catch (err) {
-    showBanner('quiz-error', err.message);
-  } finally {
+  }, function (errMsg) {
     button.disabled = false;
-    button.textContent = 'Start Quiz';
-  }
+    button.innerHTML = 'Start Quiz';
+    showBanner('quiz-error', errMsg);
+  });
 }
 
-// 8. Event Listeners & Startup
-document.addEventListener('click', function (event) {
-  var btn = event.target.closest('button');
-  if (!btn) return;
+// 8. Static Event Bindings & Startup
+function switchTab(tabName) {
+  if (!getCurrentSubject()) {
+    return;
+  }
+  activeTab = tabName;
+  saveState();
+  renderWorkspace();
+}
 
-  if (btn.id === 'primary-action-btn' || btn.id === 'sidebar-add-btn' || btn.id === 'empty-add-subject-btn') {
-    openModal(true);
-    return;
-  }
-  if (btn.id === 'load-sample-btn') {
-    loadSampleSubject();
-    return;
-  }
-  if (btn.id === 'close-modal-btn' || btn.id === 'cancel-modal-btn') {
-    openModal(false);
-    return;
-  }
+function bindStaticEvents() {
+  getEl('primary-action-btn').onclick = function () { openModal(true); };
+  getEl('sidebar-add-btn').onclick = function () { openModal(true); };
+  getEl('empty-add-subject-btn').onclick = function () { openModal(true); };
+  getEl('load-sample-btn').onclick = loadSampleSubject;
+  getEl('close-modal-btn').onclick = function () { openModal(false); };
+  getEl('cancel-modal-btn').onclick = function () { openModal(false); };
 
-  if (btn.dataset.tab && getCurrentSubject()) {
-    state.tab = btn.dataset.tab;
-    saveState();
-    renderWorkspace();
-    return;
-  }
-  if (btn.dataset.selectSubject) {
-    state.subId = btn.dataset.selectSubject;
-    syncActiveItems();
-    saveState();
-    renderWorkspace();
-    return;
-  }
-  if (btn.id === 'jump-full-schedule-btn') {
-    state.tab = 'plan';
-    saveState();
-    renderWorkspace();
-    return;
-  }
-  if (btn.dataset.jumpSum) {
-    state.tab = 'summaries';
-    renderWorkspace();
-    getEl('summary-topic-select').value = btn.dataset.jumpSum;
-    runSummary(btn.dataset.jumpSum);
-    return;
-  }
-  if (btn.dataset.jumpQuiz) {
-    state.tab = 'quizzes';
-    renderWorkspace();
-    getEl('quiz-topic-select').value = btn.dataset.jumpQuiz;
-    runQuiz(btn.dataset.jumpQuiz);
-    return;
-  }
+  getEl('tab-overview').onclick = function () { switchTab('overview'); };
+  getEl('tab-plan').onclick = function () { switchTab('plan'); };
+  getEl('tab-summaries').onclick = function () { switchTab('summaries'); };
+  getEl('tab-quizzes').onclick = function () { switchTab('quizzes'); };
+  getEl('jump-full-schedule-btn').onclick = function () { switchTab('plan'); };
 
-  if (btn.id === 'ask-delete-subject-btn') {
-    getEl('delete-prompt-default').hidden = true;
-    getEl('delete-prompt-confirm').hidden = false;
-    return;
-  }
-  if (btn.id === 'cancel-delete-subject-btn') {
-    getEl('delete-prompt-default').hidden = false;
-    getEl('delete-prompt-confirm').hidden = true;
-    return;
-  }
-  if (btn.id === 'confirm-delete-subject-btn' && getCurrentSubject()) {
-    removeSubject(getCurrentSubject().id);
-    getEl('delete-prompt-default').hidden = false;
-    getEl('delete-prompt-confirm').hidden = true;
-    return;
-  }
+  getEl('ask-delete-subject-btn').onclick = function () {
+    showEl('delete-prompt-default', false);
+    showEl('delete-prompt-confirm', true);
+  };
+  getEl('cancel-delete-subject-btn').onclick = function () {
+    showEl('delete-prompt-default', true);
+    showEl('delete-prompt-confirm', false);
+  };
+  getEl('confirm-delete-subject-btn').onclick = function () {
+    var sub = getCurrentSubject();
+    if (sub) {
+      removeSubject(sub.id);
+    }
+    showEl('delete-prompt-default', true);
+    showEl('delete-prompt-confirm', false);
+  };
 
-  if (btn.dataset.filter) {
-    state.filter = btn.dataset.filter;
-    renderWorkspace();
-    return;
-  }
-  if (btn.id === 'toggle-add-task-btn' || btn.id === 'cancel-add-task-btn') {
+  getEl('filter-all').onclick = function () { activeFilter = 'all'; renderWorkspace(); };
+  getEl('filter-pending').onclick = function () { activeFilter = 'pending'; renderWorkspace(); };
+  getEl('filter-completed').onclick = function () { activeFilter = 'completed'; renderWorkspace(); };
+
+  getEl('toggle-add-task-btn').onclick = function () {
     var form = getEl('add-milestone-form');
-    form.hidden = !form.hidden;
-    if (!form.hidden) {
+    var isHidden = (' ' + form.className + ' ').indexOf(' is-hidden ') !== -1;
+    showEl('add-milestone-form', isHidden);
+    if (isHidden) {
       getEl('milestone-date').value = plusDays(6);
     }
-    return;
-  }
-  if (btn.dataset.toggleTask) {
-    toggleTask(btn.dataset.toggleTask);
-    return;
-  }
+  };
+  getEl('cancel-add-task-btn').onclick = function () {
+    showEl('add-milestone-form', false);
+  };
 
-  if (btn.id === 'generate-summary-btn') {
-    var selectedTopic = getEl('summary-topic-select').value;
-    var finalTopic = selectedTopic === '__custom__' ? getEl('summary-custom-topic').value.trim() : selectedTopic;
+  getEl('add-milestone-form').onsubmit = function () {
+    var sub = getCurrentSubject();
+    if (!sub) {
+      return false;
+    }
+    addTask(sub.id, {
+      topic: getEl('milestone-topic').value,
+      date: getEl('milestone-date').value,
+      mins: getEl('milestone-duration').value,
+      pri: getSelectValue('milestone-priority'),
+      desc: getEl('milestone-desc').value
+    });
+    this.reset();
+    showEl('add-milestone-form', false);
+    return false;
+  };
+
+  getEl('summary-topic-select').onchange = function () {
+    showEl('summary-custom-topic', getSelectValue('summary-topic-select') === '__custom__');
+  };
+
+  getEl('generate-summary-btn').onclick = function () {
+    var picked = getSelectValue('summary-topic-select');
+    var finalTopic = picked === '__custom__' ? trimText(getEl('summary-custom-topic').value) : picked;
     runSummary(finalTopic);
-    return;
-  }
-  if (btn.dataset.selSum) {
-    state.sumId = btn.dataset.selSum;
-    renderWorkspace();
-    return;
-  }
-  if (btn.id === 'start-quiz-btn') {
-    runQuiz(getEl('quiz-topic-select').value);
-    return;
-  }
-  if (btn.id === 'drill-weak-btn' && getCurrentSubject()) {
-    var missed = getMissedQuizTopics(getSubjectQuizzes(getCurrentSubject().id));
+  };
+
+  getEl('start-quiz-btn').onclick = function () {
+    runQuiz(getSelectValue('quiz-topic-select'), []);
+  };
+
+  getEl('drill-weak-btn').onclick = function () {
+    var sub = getCurrentSubject();
+    if (!sub) {
+      return;
+    }
+    var missed = getMissedQuizTopics(getSubjectQuizzes(sub.id));
     if (missed.length > 0) {
       runQuiz('Weak Drill: ' + missed[0], missed);
     }
-    return;
-  }
-  if (btn.dataset.selQuiz) {
-    for (var i = 0; i < state.quizzes.length; i += 1) {
-      if (state.quizzes[i].id === btn.dataset.selQuiz) {
-        state.quizId = state.quizzes[i].id;
-        state.draft = state.quizzes[i].userAnswers.slice();
-        renderWorkspace();
-        break;
-      }
-    }
-    return;
-  }
-  if (btn.dataset.qq !== undefined) {
-    state.draft[Number(btn.dataset.qq)] = Number(btn.dataset.qo);
-    renderWorkspace();
-    return;
-  }
-  if (btn.id === 'submit-quiz-btn') {
-    for (var j = 0; j < state.quizzes.length; j += 1) {
-      if (state.quizzes[j].id === state.quizId) {
-        gradeQuiz(state.quizzes[j], state.draft);
-        break;
-      }
-    }
-    return;
-  }
+  };
 
-  if (btn.dataset.sample !== undefined) {
-    var sample = SAMPLES[Number(btn.dataset.sample)];
-    if (sample) {
-      getEl('new-subject-title').value = sample.title;
-      getEl('new-subject-syllabus').value = sample.text;
-    }
-    return;
-  }
-  if (btn.id === 'clear-file-btn') {
-    state.fileData = null;
-    getEl('syllabus-file-input').value = '';
-    getEl('uploaded-file-name').textContent = 'No file attached (PDF/PNG/JPG/TXT, 10 MB max)';
-    getEl('clear-file-btn').hidden = true;
-  }
-});
+  getEl('sample-btn-0').onclick = function () {
+    getEl('new-subject-title').value = SAMPLES[0].title;
+    getEl('new-subject-syllabus').value = SAMPLES[0].text;
+  };
+  getEl('sample-btn-1').onclick = function () {
+    getEl('new-subject-title').value = SAMPLES[1].title;
+    getEl('new-subject-syllabus').value = SAMPLES[1].text;
+  };
 
-getEl('summary-topic-select').addEventListener('change', function (event) {
-  getEl('summary-custom-topic').hidden = event.target.value !== '__custom__';
-});
-
-getEl('add-milestone-form').addEventListener('submit', function (event) {
-  event.preventDefault();
-  var sub = getCurrentSubject();
-  if (!sub) return;
-
-  addTask(sub.id, {
-    topic: getEl('milestone-topic').value,
-    date: getEl('milestone-date').value,
-    mins: getEl('milestone-duration').value,
-    pri: getEl('milestone-priority').value,
-    desc: getEl('milestone-desc').value,
-  });
-  event.target.reset();
-  event.target.hidden = true;
-});
-
-getEl('syllabus-file-input').addEventListener('change', async function (event) {
-  var file = event.target.files ? event.target.files[0] : null;
-  if (!file) return;
-
-  showBanner('modal-error', '');
-  if (file.size > 10 * 1024 * 1024) {
-    showBanner('modal-error', 'File exceeds 10 MB.');
-    return;
-  }
-
-  if (file.type.indexOf('text/') === 0 || /\.(txt|md)$/i.test(file.name)) {
-    var text = await file.text();
-    getEl('new-subject-syllabus').value = text.slice(0, 20000);
-    state.fileData = null;
-  } else {
-    var dataUrl = await new Promise(function (resolve, reject) {
-      var reader = new FileReader();
-      reader.onload = function () { resolve(String(reader.result || '')); };
-      reader.onerror = function () { reject(new Error('Read failed')); };
-      reader.readAsDataURL(file);
-    });
-    state.fileData = {
-      mimeType: file.type || 'application/pdf',
-      base64: dataUrl.split(',')[1] || '',
-    };
-  }
-
-  getEl('uploaded-file-name').textContent = file.name;
-  getEl('clear-file-btn').hidden = false;
-});
-
-getEl('add-subject-form').addEventListener('submit', async function (event) {
-  event.preventDefault();
-  var button = getEl('submit-subject-btn');
-  button.disabled = true;
-  button.textContent = 'Generating...';
-  showBanner('modal-error', '');
-  showBanner('modal-status', 'Reading syllabus...');
-
-  try {
-    var title = getEl('new-subject-title').value.trim();
+  getEl('add-subject-form').onsubmit = function () {
+    var title = trimText(getEl('new-subject-title').value);
     var examDate = getEl('new-subject-date').value;
     var hours = Number(getEl('new-subject-hours').value) || 3;
-    var parsed = await postJson('/api/ai/parse-syllabus', {
+    var syllabusText = trimText(getEl('new-subject-syllabus').value);
+
+    showBanner('modal-error', '');
+    if (!title || !examDate || !syllabusText) {
+      showBanner('modal-error', 'Enter subject name, exam date, and syllabus units.');
+      return false;
+    }
+
+    var button = getEl('submit-subject-btn');
+    button.disabled = true;
+    button.innerHTML = 'Generating...';
+    showBanner('modal-status', 'Reading syllabus...');
+
+    callAi('/api/ai/parse-syllabus', {
       subjectTitle: title,
       examDate: examDate,
       dailyHours: hours,
       currentDate: plusDays(0),
-      syllabusText: getEl('new-subject-syllabus').value,
-      fileData: state.fileData,
+      syllabusText: syllabusText
+    }, function (parsed) {
+      button.disabled = false;
+      button.innerHTML = 'Build Study Plan';
+      createSubject(title, examDate, hours, parsed);
+      openModal(false);
+    }, function (errMsg) {
+      button.disabled = false;
+      button.innerHTML = 'Build Study Plan';
+      showBanner('modal-status', '');
+      showBanner('modal-error', errMsg);
     });
-    createSubject(title, examDate, hours, parsed);
-    openModal(false);
-  } catch (err) {
-    showBanner('modal-status', '');
-    showBanner('modal-error', err.message);
-  } finally {
-    button.disabled = false;
-    button.textContent = 'Build Study Plan';
-  }
-});
+    return false;
+  };
+}
 
 loadState();
+bindStaticEvents();
 renderWorkspace();
