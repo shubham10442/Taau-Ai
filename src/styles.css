@@ -19,7 +19,8 @@ button { cursor: pointer; }
 .grid-12 { display: grid; grid-template-columns: repeat(12, 1fr); gap: 28px; align-items: start; }
 .col-5 { grid-column: span 5; } .col-7 { grid-column: span 7; }
 .row { display: flex; align-items: center; gap: 10px; }
-.between { justify-content: space-between; } .end { justify-content: flex-end; } .wrap { flex-wrap: wrap; }
+.between { justify-content: space-between; } .end { justify-content: flex-end; } .center { justify-content: center; } .wrap { flex-wrap: wrap; } .align-start { align-items: flex-start; }
+.mb-md { margin-bottom: 18px; }
 .stack-sm { display: flex; flex-direction: column; gap: 8px; }
 .stack-md { display: flex; flex-direction: column; gap: 16px; }
 .stack-lg { display: flex; flex-direction: column; gap: 22px; }
@@ -78,6 +79,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* Workspace */
 .workspace { max-width: 1400px; width: 100%; margin: 0 auto; display: flex; min-height: calc(100vh - 65px); }
 .sidebar { width: 264px; flex-shrink: 0; border-right: 1px solid var(--soft); background: var(--muted-bg); display: flex; flex-direction: column; justify-content: space-between; }
+.sidebar-top { padding: 20px; }
 .sidebar-title { font: 600 1rem/1 var(--display); color: var(--muted); }
 .subject-list { display: flex; flex-direction: column; gap: 10px; }
 .subject-item { width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--soft); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; color: inherit; }
@@ -119,6 +121,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .banner.ok { border: 1px solid rgba(184, 242, 91, 0.35); background: rgba(184, 242, 91, 0.12); color: var(--lime); }
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.72); backdrop-filter: blur(4px); padding: 16px; display: grid; place-items: center; }
 .modal-dialog { width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; }
+.modal-head { background: var(--muted-bg); }
+.modal-body { padding: 22px; }
+.modal-foot { padding-top: 14px; }
 .file-drop { background: var(--muted-bg); border: 1px dashed #3a3d35; border-radius: 12px; padding: 10px 14px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 
 @media (max-width: 1000px) {
