@@ -11,44 +11,133 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="icon" href="favicon.ico" />
-    <link rel="stylesheet" href="style.css" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
     <header class="topbar">
       <div class="topbar-inner">
-        <a href="index.html" class="brand">Taau Ai</a>
-        <nav id="workspace-nav" class="nav nav-tabs">
-          <button type="button" id="tab-overview" class="tab is-active">Overview</button>
-          <button type="button" id="tab-plan" class="tab">Study Plan</button>
-          <button type="button" id="tab-summaries" class="tab">Summaries</button>
-          <button type="button" id="tab-quizzes" class="tab">Quizzes</button>
+        <a href="#top" class="brand">Taau Ai</a>
+        <nav id="landing-nav" class="nav">
+          <a href="#sprint-estimator" class="nav-link">Estimator</a>
+          <a href="#workflow" class="nav-link">How I use it</a>
+          <a href="#limits" class="nav-link">Limits</a>
         </nav>
-        <button type="button" id="primary-action-btn" class="btn primary">+ New Subject</button>
+        <nav id="workspace-nav" class="nav nav-tabs" hidden>
+          <button type="button" class="tab is-active" data-tab="overview">Overview</button>
+          <button type="button" class="tab" data-tab="plan">Study Plan</button>
+          <button type="button" class="tab" data-tab="summaries">Summaries</button>
+          <button type="button" class="tab" data-tab="quizzes">Quizzes</button>
+        </nav>
+        <button type="button" id="primary-action-btn" class="btn primary">Sign In</button>
       </div>
     </header>
 
-    <div id="workspace-view" class="workspace">
+    <div id="boot-loader" class="center-screen"><p class="muted">Loading your study desk...</p></div>
+
+    <!-- Signed-out Landing -->
+    <main id="landing-view" class="container stack-xl" hidden>
+      <section id="top" class="grid-12">
+        <div class="col-6 stack-lg">
+          <div class="stack-sm">
+            <h1 class="hero-title">Turn a messy course PDF into a realistic study plan.</h1>
+          </div>
+          <div class="stack-sm">
+            <div class="row wrap">
+              <button type="button" id="landing-signin-btn" class="btn primary lg">Sign in with Google &rarr;</button>
+              <a href="#workflow" class="btn secondary lg">See how it handles a real week</a>
+            </div>
+            <p id="auth-error-msg" class="amber" role="alert" hidden></p>
+            <p class="meta">Saves progress in Firebase · Accepts text, PDFs, or photos </p>
+          </div>
+        </div>
+
+        <div id="sprint-estimator" class="col-6 card">
+          <div class="row between wrap">
+            <div>
+              <h2 class="h3">Exam Sprint Estimator</h2>
+              <p class="meta">Preview how your prep hours split before finals</p>
+            </div>
+            <span id="est-total" class="mono lime">18h total</span>
+          </div>
+
+          <div class="row between wrap">
+            <div class="stack-sm">
+              <span class="meta">Days left</span>
+              <div class="seg-group" id="est-days-group">
+                <button type="button" class="seg" data-est-days="3">3d</button>
+                <button type="button" class="seg is-active" data-est-days="6">6d</button>
+                <button type="button" class="seg" data-est-days="10">10d</button>
+              </div>
+            </div>
+            <div class="stack-sm">
+              <span class="meta">Hours / day</span>
+              <div class="seg-group" id="est-hours-group">
+                <button type="button" class="seg" data-est-hours="2">2h</button>
+                <button type="button" class="seg is-active" data-est-hours="3">3h</button>
+                <button type="button" class="seg" data-est-hours="4">4h</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="est-breakdown" class="stack-sm"></div>
+
+          <div class="row between border-t" style="padding-top:12px">
+            <span class="meta">50% concepts · 30% practice · 20% drills</span>
+            <button type="button" class="btn primary sm" id="est-start-btn">Try your syllabus &rarr;</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="workflow" class="grid-12">
+        <div class="col-7 stack-md">
+          <div>
+            <p class="meta lime">How I use this before finals</p>
+            <h2 class="h2">No magic shortcuts, just less friction before you start solving.</h2>
+          </div>
+          <div class="steps-list">
+            <div class="step-row"><span class="mono lime">01.</span><div><h3>Paste the official unit list, not the textbook</h3><p class="muted">Upload the department syllabus PDF, a board photo, or bullets with your daily hours.</p></div></div>
+            <div class="step-row"><span class="mono amber">02.</span><div><h3>Heavy topics early, timed drills last</h3><p class="muted">Foundational theorems land on days 1–3; timed review sits in the final 48 hours.</p></div></div>
+            <div class="step-row"><span class="mono">03.</span><div><h3>Drill the questions you actually missed</h3><p class="muted">Graded quiz mistakes feed straight into a focused weak-topic drill.</p></div></div>
+          </div>
+        </div>
+
+        <aside id="limits" class="col-5 card">
+          <div class="row between"><h2 class="h3">Honest Scope &amp; Rules</h2><span class="meta">Read before cramming</span></div>
+          <div class="stack-sm">
+            <div class="divider-top"><strong>Best for 1 to 14 day exam sprints</strong><p class="muted">Built for midterms and end-sems, not year-long planning.</p></div>
+            <div class="divider-top"><strong>Check formulas against class slides</strong><p class="muted">Verify notation against your lecturer's rubric.</p></div>
+            <div class="divider-top"><strong>10 MB cap on uploaded files</strong><p class="muted">Upload the syllabus outline rather than a textbook PDF.</p></div>
+          </div>
+        </aside>
+      </section>
+
+      <footer class="footer"><span>Taau Ai · Exam Revision Workspace</span><span>HTML, CSS, JavaScript, Firebase &amp; Gemini</span></footer>
+    </main>
+
+    <!-- Signed-in Workspace -->
+    <div id="workspace-view" class="workspace" hidden>
       <aside class="sidebar">
-        <div class="sidebar-top stack-md">
+        <div class="stack-md" style="padding:20px">
           <div class="row between"><h2 class="sidebar-title">My Subjects (<span id="subject-count">0</span>)</h2><button type="button" id="sidebar-add-btn" class="circle-btn" aria-label="Add subject">+</button></div>
           <div id="subject-list" class="subject-list"></div>
         </div>
         <div class="sidebar-footer">
-          <span class="meta">Subjects &amp; plan saved in cookies</span>
+          <div class="min-0"><p id="user-display-name" class="truncate small-strong"></p><p id="user-email" class="truncate meta"></p></div>
+          <button type="button" id="signout-btn" class="btn ghost sm">Sign out</button>
         </div>
       </aside>
 
       <main class="workspace-main">
-        <section id="empty-subjects-state" class="card empty-card">
-          <h1 class="h2">Ready to set up your first exam</h1>
-          <p class="muted">Paste your course syllabus or attach a file to get milestones, formula sheets, and graded quizzes.</p>
-          <div class="row wrap center">
-            <button type="button" id="empty-add-subject-btn" class="btn primary lg">Add Exam Subject</button>
-          </div>
+        <div id="sync-error-banner" class="banner error" role="alert" hidden></div>
+
+        <section id="empty-subjects-state" class="card empty-card" hidden>
+          <h1 class="h2" id="welcome-heading">Ready to set up your first exam</h1>
+          <p class="muted">Paste a course syllabus or upload a PDF/photo to get milestones, formula sheets, and graded quizzes.</p>
+          <button type="button" id="empty-add-subject-btn" class="btn primary lg">Add Your First Subject</button>
         </section>
 
-        <div id="subject-workspace" class="stack-lg is-hidden">
+        <div id="subject-workspace" class="stack-lg" hidden>
           <div class="row between wrap">
             <div><h1 id="subject-title-heading" class="subject-title"></h1><p id="subject-meta-line" class="meta"></p></div>
             <div class="card compact readiness-box">
@@ -60,7 +149,7 @@
           <div class="kpi-strip">
             <div class="card compact"><span class="meta">Days Left</span><span id="kpi-days" class="kpi">0d</span></div>
             <div class="card compact"><span class="meta">Milestones Done</span><span id="kpi-milestones" class="kpi">0/0</span></div>
-            <div class="card compact"><span class="meta">Quiz Average</span><span id="kpi-quiz-avg" class="kpi">&mdash;</span></div>
+            <div class="card compact"><span class="meta">Quiz Average</span><span id="kpi-quiz-avg" class="kpi">—</span></div>
           </div>
 
           <!-- 1. Overview -->
@@ -82,7 +171,7 @@
               </div>
               <div class="card compact">
                 <div id="delete-prompt-default" class="row between"><span class="meta">Done with this paper?</span><button type="button" id="ask-delete-subject-btn" class="link-danger">Remove Subject</button></div>
-                <div id="delete-prompt-confirm" class="row between is-hidden">
+                <div id="delete-prompt-confirm" class="row between" hidden>
                   <span class="small-strong">Delete subject &amp; data?</span>
                   <div class="row"><button type="button" id="cancel-delete-subject-btn" class="btn secondary sm">Cancel</button><button type="button" id="confirm-delete-subject-btn" class="btn danger sm">Delete</button></div>
                 </div>
@@ -91,17 +180,17 @@
           </section>
 
           <!-- 2. Study Plan -->
-          <section id="panel-plan" class="is-hidden">
+          <section id="panel-plan" hidden>
             <div class="card flush">
               <div class="row between wrap card-pad border-b">
                 <div class="seg-group" id="plan-filter-group">
-                  <button type="button" id="filter-all" class="seg is-active">All</button>
-                  <button type="button" id="filter-pending" class="seg">Pending</button>
-                  <button type="button" id="filter-completed" class="seg">Completed</button>
+                  <button type="button" class="seg is-active" data-filter="all">All</button>
+                  <button type="button" class="seg" data-filter="pending">Pending</button>
+                  <button type="button" class="seg" data-filter="completed">Completed</button>
                 </div>
                 <button type="button" id="toggle-add-task-btn" class="btn secondary sm">+ Add Milestone</button>
               </div>
-              <form id="add-milestone-form" class="inline-form is-hidden">
+              <form id="add-milestone-form" class="inline-form" hidden>
                 <div class="form-grid-4">
                   <div class="field"><label for="milestone-topic">Topic</label><input id="milestone-topic" required placeholder="Topic name" /></div>
                   <div class="field"><label for="milestone-date">Target Date</label><input id="milestone-date" type="date" required class="mono" /></div>
@@ -116,32 +205,32 @@
           </section>
 
           <!-- 3. Summaries -->
-          <section id="panel-summaries" class="is-hidden">
-            <div class="row between wrap mb-md">
+          <section id="panel-summaries" hidden>
+            <div class="row between wrap" style="margin-bottom:18px">
               <div><p class="meta">Double-check formulas against class slides</p><h2 class="h2">Topic Sheets &amp; Formulas</h2></div>
               <div class="row wrap">
                 <select id="summary-topic-select" class="pill-select" aria-label="Select topic"></select>
-                <input id="summary-custom-topic" class="input is-hidden" placeholder="Custom topic" />
+                <input id="summary-custom-topic" class="input" placeholder="Custom topic" hidden />
                 <button type="button" id="generate-summary-btn" class="btn primary">Make Study Sheet</button>
               </div>
             </div>
-            <p id="summary-error" class="banner error is-hidden" role="alert"></p>
+            <p id="summary-error" class="banner error" role="alert" hidden></p>
             <div id="summaries-container"></div>
           </section>
 
           <!-- 4. Quizzes -->
-          <section id="panel-quizzes" class="is-hidden">
-            <div class="row between wrap mb-md">
+          <section id="panel-quizzes" hidden>
+            <div class="row between wrap" style="margin-bottom:18px">
               <div><p class="meta">Instant grading with step-by-step explanations</p><h2 class="h2">Practice Quizzes</h2></div>
               <div class="row wrap">
                 <select id="quiz-topic-select" class="pill-select" aria-label="Quiz topic"></select>
                 <select id="quiz-difficulty-select" class="pill-select" aria-label="Difficulty"><option value="standard">Standard</option><option value="intensive">Intensive</option></select>
                 <select id="quiz-count-select" class="pill-select mono" aria-label="Count"><option value="5">5 Qs</option><option value="10">10 Qs</option><option value="15">15 Qs</option></select>
                 <button type="button" id="start-quiz-btn" class="btn primary">Start Quiz</button>
-                <button type="button" id="drill-weak-btn" class="btn amber-btn is-hidden">Drill Missed</button>
+                <button type="button" id="drill-weak-btn" class="btn amber-btn" hidden>Drill Missed</button>
               </div>
             </div>
-            <p id="quiz-error" class="banner error is-hidden" role="alert"></p>
+            <p id="quiz-error" class="banner error" role="alert" hidden></p>
             <div id="quizzes-container"></div>
           </section>
         </div>
@@ -149,37 +238,36 @@
     </div>
 
     <!-- Add Subject Modal -->
-    <div id="add-subject-modal" class="modal-backdrop is-hidden" role="dialog" aria-modal="true">
+    <div id="add-subject-modal" class="modal-backdrop" role="dialog" aria-modal="true" hidden>
       <div class="card flush modal-dialog">
-        <div class="row between card-pad border-b modal-head">
-          <div><h2 class="h3">Add Exam Subject</h2><p class="meta">Paste syllabus units or attach a file below.</p></div>
+        <div class="row between card-pad border-b" style="background:var(--muted-bg)">
+          <div><h2 class="h3">Add Exam Subject</h2><p class="meta">Paste syllabus or attach a PDF/photo (10 MB max).</p></div>
           <button type="button" id="close-modal-btn" class="circle-btn" aria-label="Close">&times;</button>
         </div>
-        <form id="add-subject-form" class="stack-md modal-body">
+        <form id="add-subject-form" class="stack-md" style="padding:22px">
           <div class="form-grid-4">
             <div class="field span-2"><label for="new-subject-title">Subject Name</label><input id="new-subject-title" maxlength="120" required placeholder="e.g., Data Structures & Algorithms" /></div>
             <div class="field"><label for="new-subject-date">Exam Date</label><input id="new-subject-date" type="date" required class="mono" /></div>
             <div class="field"><label for="new-subject-hours">Hours / Day</label><input id="new-subject-hours" type="number" min="0.5" max="14" step="0.5" value="3" class="mono" /></div>
           </div>
           <div class="field">
-            <label for="new-subject-syllabus">Syllabus Units</label>
+            <div class="row between">
+              <label for="new-subject-syllabus">Syllabus Units</label>
+              <div class="row"><span class="meta">Sample:</span><button type="button" class="link-btn sample-btn" data-sample="0">DSA</button><span class="meta">·</span><button type="button" class="link-btn sample-btn" data-sample="1">Discrete Math</button></div>
+            </div>
             <textarea id="new-subject-syllabus" rows="4" placeholder="Paste units or topic bullets..."></textarea>
           </div>
           <div class="file-drop">
-            <span id="uploaded-file-name" class="meta">No file attached (TXT, MD, CSV, PDF, PNG, JPG)</span>
-            <div class="row">
-              <button type="button" id="clear-file-btn" class="btn secondary sm is-hidden">Remove</button>
-              <label class="btn secondary sm" for="syllabus-file-input">Choose File</label>
-              <input id="syllabus-file-input" type="file" accept=".txt,.md,.csv,.pdf,image/png,image/jpeg,image/webp" class="is-hidden" />
-            </div>
+            <span id="uploaded-file-name" class="meta">No file attached (PDF/PNG/JPG/TXT, 10 MB max)</span>
+            <div class="row"><button type="button" id="clear-file-btn" class="btn secondary sm" hidden>Remove</button><label class="btn secondary sm">Choose File<input id="syllabus-file-input" type="file" accept=".pdf,.txt,.md,image/png,image/jpeg,image/webp" hidden /></label></div>
           </div>
-          <p id="modal-error" class="banner error is-hidden" role="alert"></p>
-          <p id="modal-status" class="banner ok is-hidden"></p>
-          <div class="row end border-t modal-foot"><button type="button" id="cancel-modal-btn" class="btn secondary">Cancel</button><button type="submit" id="submit-subject-btn" class="btn primary">Build Study Plan</button></div>
+          <p id="modal-error" class="banner error" role="alert" hidden></p>
+          <p id="modal-status" class="banner ok" hidden></p>
+          <div class="row end border-t" style="padding-top:14px"><button type="button" id="cancel-modal-btn" class="btn secondary">Cancel</button><button type="submit" id="submit-subject-btn" class="btn primary">Build Study Plan</button></div>
         </form>
       </div>
     </div>
 
-    <script src="app.js"></script>
+    <script type="module" src="/src/app.js"></script>
   </body>
 </html>
