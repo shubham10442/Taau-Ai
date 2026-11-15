@@ -11,13 +11,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="icon" href="/favicon.ico" />
-    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="icon" href="favicon.ico" />
+    <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <header class="topbar">
       <div class="topbar-inner">
-        <a href="/" class="brand">Taau Ai</a>
+        <a href="index.html" class="brand">Taau Ai</a>
         <nav id="workspace-nav" class="nav nav-tabs">
           <button type="button" id="tab-overview" class="tab is-active">Overview</button>
           <button type="button" id="tab-plan" class="tab">Study Plan</button>
@@ -42,10 +42,9 @@
       <main class="workspace-main">
         <section id="empty-subjects-state" class="card empty-card">
           <h1 class="h2">Ready to set up your first exam</h1>
-          <p class="muted">Paste your course syllabus or load a sample to get milestones, formula sheets, and graded quizzes.</p>
+          <p class="muted">Paste your course syllabus or attach a file to get milestones, formula sheets, and graded quizzes.</p>
           <div class="row wrap center">
             <button type="button" id="empty-add-subject-btn" class="btn primary lg">Add Exam Subject</button>
-            <button type="button" id="load-sample-btn" class="btn secondary lg">Load CS101 Sample</button>
           </div>
         </section>
 
@@ -153,7 +152,7 @@
     <div id="add-subject-modal" class="modal-backdrop is-hidden" role="dialog" aria-modal="true">
       <div class="card flush modal-dialog">
         <div class="row between card-pad border-b modal-head">
-          <div><h2 class="h3">Add Exam Subject</h2><p class="meta">Paste syllabus units or load a quick sample below.</p></div>
+          <div><h2 class="h3">Add Exam Subject</h2><p class="meta">Paste syllabus units or attach a file below.</p></div>
           <button type="button" id="close-modal-btn" class="circle-btn" aria-label="Close">&times;</button>
         </div>
         <form id="add-subject-form" class="stack-md modal-body">
@@ -163,11 +162,16 @@
             <div class="field"><label for="new-subject-hours">Hours / Day</label><input id="new-subject-hours" type="number" min="0.5" max="14" step="0.5" value="3" class="mono" /></div>
           </div>
           <div class="field">
-            <div class="row between">
-              <label for="new-subject-syllabus">Syllabus Units</label>
-              <div class="row"><span class="meta">Sample:</span><button type="button" id="sample-btn-0" class="link-btn">DSA</button><span class="meta">&middot;</span><button type="button" id="sample-btn-1" class="link-btn">Discrete Math</button></div>
+            <label for="new-subject-syllabus">Syllabus Units</label>
+            <textarea id="new-subject-syllabus" rows="4" placeholder="Paste units or topic bullets..."></textarea>
+          </div>
+          <div class="file-drop">
+            <span id="uploaded-file-name" class="meta">No file attached (TXT, MD, CSV, PDF, PNG, JPG)</span>
+            <div class="row">
+              <button type="button" id="clear-file-btn" class="btn secondary sm is-hidden">Remove</button>
+              <label class="btn secondary sm" for="syllabus-file-input">Choose File</label>
+              <input id="syllabus-file-input" type="file" accept=".txt,.md,.csv,.pdf,image/png,image/jpeg,image/webp" class="is-hidden" />
             </div>
-            <textarea id="new-subject-syllabus" rows="5" placeholder="Paste units or topic bullets..."></textarea>
           </div>
           <p id="modal-error" class="banner error is-hidden" role="alert"></p>
           <p id="modal-status" class="banner ok is-hidden"></p>
@@ -176,6 +180,6 @@
       </div>
     </div>
 
-    <script src="/src/app.js"></script>
+    <script src="app.js"></script>
   </body>
 </html>

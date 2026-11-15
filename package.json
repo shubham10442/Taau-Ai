@@ -4,11 +4,11 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node server.js",
-    "build": "node --check server.js && node --check src/app.js",
-    "start": "node server.js",
+    "dev": "node -e \"const h=require('http'),f=require('fs'),p=require('path'),m={'.html':'text/html;charset=utf-8','.css':'text/css;charset=utf-8','.js':'application/javascript;charset=utf-8','.ico':'image/x-icon','.png':'image/png','.svg':'image/svg+xml'},port=Number(process.env.PORT||3000);h.createServer((q,r)=>{let u=(q.url||'/').split('?')[0].split('..').join('');if(u==='/')u='/index.html';let t=p.join(process.cwd(),u);if(!f.existsSync(t)||f.statSync(t).isDirectory())t=p.join(process.cwd(),'index.html');r.writeHead(200,{'Content-Type':m[p.extname(t).toLowerCase()]||'application/octet-stream'});f.createReadStream(t).pipe(r)}).listen(port,'0.0.0.0',()=>console.log('Listening on '+port))\"",
+    "build": "node --check app.js",
+    "start": "node -e \"const h=require('http'),f=require('fs'),p=require('path'),m={'.html':'text/html;charset=utf-8','.css':'text/css;charset=utf-8','.js':'application/javascript;charset=utf-8','.ico':'image/x-icon','.png':'image/png','.svg':'image/svg+xml'},port=Number(process.env.PORT||3000);h.createServer((q,r)=>{let u=(q.url||'/').split('?')[0].split('..').join('');if(u==='/')u='/index.html';let t=p.join(process.cwd(),u);if(!f.existsSync(t)||f.statSync(t).isDirectory())t=p.join(process.cwd(),'index.html');r.writeHead(200,{'Content-Type':m[p.extname(t).toLowerCase()]||'application/octet-stream'});f.createReadStream(t).pipe(r)}).listen(port,'0.0.0.0',()=>console.log('Listening on '+port))\"",
     "clean": "rm -rf dist",
-    "lint": "node --check server.js && node --check src/app.js"
+    "lint": "node --check app.js"
   },
   "dependencies": {}
 }

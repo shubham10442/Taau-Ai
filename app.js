@@ -1,16 +1,5 @@
-// 1. App Data, Samples & Curated Offline Knowledge Bank
+// 1. App Data & Curated Offline Knowledge Bank
 var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-var SAMPLES = [
-  {
-    title: 'Data Structures & Algorithms',
-    text: 'Unit 1: Big-O, Recurrence Relations, Master Theorem\nUnit 2: Stacks, Queues, Linked Lists\nUnit 3: BSTs, AVL Rotations, Heaps\nUnit 4: BFS, DFS, Dijkstra, Kruskal MST'
-  },
-  {
-    title: 'Discrete Mathematics',
-    text: 'Mod 1: Quantifiers & Proofs\nMod 2: Equivalence Relations\nMod 3: Strong Induction & Recurrences\nMod 4: Pigeonhole & Inclusion-Exclusion'
-  }
-];
 
 var SHEET_BANK = [
   {
@@ -248,6 +237,7 @@ var activeQuizId = '';
 var quizDraft = [];
 var activeTab = 'overview';
 var activeFilter = 'all';
+var attachedFileName = '';
 
 // 2. Classic DOM, String & Date Helpers
 function getEl(id) {
@@ -834,11 +824,6 @@ function createSubject(title, examDate, hours, parsed) {
   syncActiveItems();
   saveState();
   renderWorkspace();
-}
-
-function loadSampleSubject() {
-  var samplePlan = buildPlanFromSyllabus(SAMPLES[0].title, plusDays(6), 3, SAMPLES[0].text);
-  createSubject(SAMPLES[0].title, plusDays(6), 3, samplePlan);
 }
 
 function toggleTask(taskId) {
@@ -1457,6 +1442,13 @@ function renderWorkspace() {
 }
 
 // 7. Modal & Offline Feature Actions
+function clearAttachedFile() {
+  attachedFileName = '';
+  getEl('syllabus-file-input').value = '';
+  getEl('uploaded-file-name').innerHTML = 'No file attached (TXT, MD, CSV, PDF, PNG, JPG)';
+  showEl('clear-file-btn', false);
+}
+
 function openModal(show) {
   showEl('add-subject-modal', show);
   if (show) {
@@ -1466,6 +1458,7 @@ function openModal(show) {
     showBanner('modal-status', '');
   } else {
     getEl('add-subject-form').reset();
+    clearAttachedFile();
   }
 }
 
@@ -1507,7 +1500,6 @@ function bindStaticEvents() {
   getEl('primary-action-btn').onclick = function () { openModal(true); };
   getEl('sidebar-add-btn').onclick = function () { openModal(true); };
   getEl('empty-add-subject-btn').onclick = function () { openModal(true); };
-  getEl('load-sample-btn').onclick = loadSampleSubject;
   getEl('close-modal-btn').onclick = function () { openModal(false); };
   getEl('cancel-modal-btn').onclick = function () { openModal(false); };
 
@@ -1592,13 +1584,38 @@ function bindStaticEvents() {
     }
   };
 
-  getEl('sample-btn-0').onclick = function () {
-    getEl('new-subject-title').value = SAMPLES[0].title;
-    getEl('new-subject-syllabus').value = SAMPLES[0].text;
+  getEl('clear-file-btn').onclick = function () {
+    clearAttachedFile();
+    showBanner('modal-status', '');
   };
-  getEl('sample-btn-1').onclick = function () {
-    getEl('new-subject-title').value = SAMPLES[1].title;
-    getEl('new-subject-syllabus').value = SAMPLES[1].text;
+
+  getEl('syllabus-file-input').onchange = function () {
+    var file = this.files && this.files[0] ? this.files[0] : null;
+    if (!file) {
+      return;
+    }
+    showBanner('modal-error', '');
+    showBanner('modal-status', '');
+    if (file.size > 10 * 1024 * 1024) {
+      clearAttachedFile();
+      showBanner('modal-error', 'File exceeds 10 MB.');
+      return;
+    }
+
+    attachedFileName = file.name;
+    getEl('uploaded-file-name').innerHTML = escapeHtml(file.name);
+    showEl('clear-file-btn', true);
+
+    if (file.type.indexOf('text/') === 0 || /\.(txt|md|csv)$/i.test(file.name)) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        getEl('new-subject-syllabus').value = String(reader.result || '').substring(0, 20000);
+        showBanner('modal-status', 'Loaded syllabus text from ' + file.name + '.');
+      };
+      reader.readAsText(file);
+    } else {
+      showBanner('modal-status', 'Attached ' + file.name + '. Paste topic lines above or build directly.');
+    }
   };
 
   getEl('add-subject-form').onsubmit = function () {
@@ -1608,12 +1625,16 @@ function bindStaticEvents() {
     var syllabusText = trimText(getEl('new-subject-syllabus').value);
 
     showBanner('modal-error', '');
-    if (!title || !examDate || !syllabusText) {
-      showBanner('modal-error', 'Enter subject name, exam date, and syllabus units.');
+    if (!title || !examDate || (!syllabusText && !attachedFileName)) {
+      showBanner('modal-error', 'Enter subject name, exam date, and syllabus units or attach a file.');
       return false;
     }
 
-    var parsed = buildPlanFromSyllabus(title, examDate, hours, syllabusText);
+    var sourceText = syllabusText || attachedFileName.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ');
+    var parsed = buildPlanFromSyllabus(title, examDate, hours, sourceText);
+    if (attachedFileName) {
+      parsed.syllabusOverview = parsed.syllabusOverview + ' Attached file: ' + attachedFileName;
+    }
     createSubject(title, examDate, hours, parsed);
     openModal(false);
     return false;
