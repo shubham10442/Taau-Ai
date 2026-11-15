@@ -1,62 +1,152 @@
+import { initializeApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import {
-  addCustomStudyTask,
-  createFlashcardsBatch,
-  createQuiz,
-  createSubjectWithTasks,
-  deleteSubjectAndChildren,
-  ensureUserProfile,
-  reviewFlashcardSpacedRepetition,
-  saveStudySummary,
-  signInWithGoogle,
-  signOutUser,
-  submitQuizCompletion,
-  subscribeSubjectFlashcards,
-  subscribeSubjectQuizzes,
-  subscribeSubjects,
-  subscribeSubjectSummaries,
-  subscribeSubjectTasks,
-  toggleStudyTask,
-  watchAuth,
-} from './firebase-client.js';
+  collection, deleteDoc, doc, getDoc, getDocFromServer, getFirestore,
+  onSnapshot, query, serverTimestamp, setDoc, updateDoc, where, writeBatch,
+} from 'firebase/firestore';
+import firebaseConfig from '../firebase-applet-config.json';
 
-// Built-in sample syllabi (including 1st-year CSE subjects)
+// ── 1. Firebase Setup & Helpers ─────────────────────────────────────────────
+const fbApp = initializeApp(firebaseConfig);
+const db = getFirestore(fbApp, firebaseConfig.firestoreDatabaseId);
+const auth = getAuth(fbApp);
+const googleProvider = new GoogleAuthProvider();
+
+// Clamp strings/numbers so Firestore writes always satisfy security rules
+const clampText = (val, max, fallback = '') => {
+  const s = String(val ?? '').trim();
+  return !s ? fallback : s.length > max ? s.slice(0, max) : s;
+};
+const clampNum = (val, min, max, isFloat = false) => {
+  const n = Number(val);
+  if (Number.isNaN(n)) return min;
+  const clamped = Math.min(Math.max(n, min), max);
+  return isFloat ? clamped : Math.round(clamped);
+};
+const makeId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+// Standard error formatter required for Firestore debugging
+function handleDbError(error, operationType, path) {
+  const user = auth.currentUser;
+  const info = {
+    error: error instanceof Error ? error.message : String(error),
+    operationType,
+    path,
+    authInfo: { userId: user?.uid ?? null, email: user?.email ?? null },
+  };
+  console.error('Firestore Error:', JSON.stringify(info));
+  throw new Error(JSON.stringify(info));
+}
+
+// Verify Firestore connection on startup
+getDocFromServer(doc(db, 'test', 'connection')).catch((err) => {
+  if (String(err?.message).includes('offline')) console.error('Check Firebase configuration.');
+});
+
+// Generic real-time listener for user-owned collections
+function listenCollection(name, filters, onData, onError) {
+  const q = query(collection(db, name), ...filters.map(([k, v]) => where(k, '==', v)));
+  return onSnapshot(
+    q,
+    (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (err) => {
+      try { handleDbError(err, 'list', name); }
+      catch (wrapped) { onError(wrapped); }
+    },
+  );
+}
+
+// ── 2. Static Demo & Sample Data ────────────────────────────────────────────
 const SAMPLE_SYLLABI = [
   {
     title: 'Data Structures & Algorithms',
     syllabus: [
-      'Unit 1: Time & Space Complexity (Big-O, Big-Omega, Recurrence Relations, Master Theorem)',
-      'Unit 2: Arrays, Linked Lists, Stacks & Queues (Infix to Postfix, Circular Queues, Doubly Linked Lists)',
-      'Unit 3: Trees & Binary Search Trees (Traversals, AVL Rotations, Heap Sort & Priority Queues)',
-      'Unit 4: Hashing & Graphs (Collision Resolution, BFS, DFS, Dijkstra, Kruskal & Prim MST)',
+      'Unit 1: Time & Space Complexity (Big-O, Recurrence Relations, Master Theorem)',
+      'Unit 2: Arrays, Linked Lists, Stacks & Queues (Infix to Postfix, Circular Queues)',
+      'Unit 3: Trees & BSTs (Traversals, AVL Rotations, Heap Sort & Priority Queues)',
+      'Unit 4: Hashing & Graphs (Collision Resolution, BFS, DFS, Dijkstra, Kruskal MST)',
       'Unit 5: Searching & Sorting (Merge Sort, Quick Sort, Binary Search edge cases)',
     ].join('\n'),
   },
   {
     title: 'Discrete Mathematics',
     syllabus: [
-      'Module 1: Propositional & Predicate Logic (Truth Tables, Equivalences, Quantifiers, Proof by Contradiction)',
+      'Module 1: Propositional & Predicate Logic (Truth Tables, Quantifiers, Contradiction)',
       'Module 2: Sets, Relations & Functions (Equivalence Relations, Partial Orders, Bijections)',
       'Module 3: Mathematical Induction & Recursion (Strong Induction, Recurrence Solving)',
-      'Module 4: Combinatorics & Counting (Permutations, Combinations, Pigeonhole Principle, Inclusion-Exclusion)',
-      'Module 5: Graph Theory Basics (Eulerian & Hamiltonian Paths, Planar Graphs, Chromatic Number)',
+      'Module 4: Combinatorics (Permutations, Combinations, Pigeonhole, Inclusion-Exclusion)',
+      'Module 5: Graph Theory Basics (Eulerian & Hamiltonian Paths, Chromatic Number)',
     ].join('\n'),
   },
   {
     title: 'Macroeconomics Finals',
     syllabus: [
-      'Module 1: National Income Accounting (GDP, GNP, CPI vs GDP Deflator, Real vs Nominal)',
-      'Module 2: Aggregate Demand & Aggregate Supply (Short-run vs Long-run equilibrium, Stagflation shocks)',
-      'Module 3: Fiscal Policy & Multiplier Effect (Government spending multiplier, Tax multiplier, Crowding out)',
+      'Module 1: National Income Accounting (GDP, GNP, CPI vs GDP Deflator)',
+      'Module 2: Aggregate Demand & Supply (Short-run vs Long-run equilibrium, Stagflation)',
+      'Module 3: Fiscal Policy & Multiplier (Spending multiplier, Tax multiplier, Crowding out)',
       'Module 4: Monetary Policy & Banking (Money multiplier, Reserve requirements, Taylor Rule)',
-      'Module 5: Open-Economy Macroeconomics (Exchange rates, Balance of payments)',
     ].join('\n'),
   },
 ];
 
-// Application state
+const WALKTHROUGH_DATA = {
+  dsa: {
+    meta: '6 days left · 3h/day',
+    rawTitle: 'CS101 · End-Sem Syllabus Snippet',
+    rawSyllabus: 'Unit 1: Recurrence Relations, Big-O & Master Theorem\nUnit 2: Stacks, Queues, Infix-to-Postfix & Circular Buffers\nUnit 3: Binary Search Trees, AVL Rotations & Binary Heaps\nUnit 4: Graph Traversals (BFS/DFS), Dijkstra & Kruskal MST',
+    plan: [
+      { day: 'Day 1', topic: 'Master Theorem & Recurrences', duration: '45m', tag: 'High Priority', cls: 'is-amber' },
+      { day: 'Day 2', topic: 'AVL Rotations (LL, RR, LR, RL)', duration: '60m', tag: 'High Priority', cls: 'is-amber' },
+      { day: 'Day 4', topic: 'Dijkstra vs Bellman-Ford Edge Cases', duration: '50m', tag: 'Scheduled', cls: '' },
+      { day: 'Day 6', topic: 'Past-Paper Timed Mock (Units 1-4)', duration: '75m', tag: 'Final Drill', cls: 'is-lime' },
+    ],
+    formulaTitle: 'Master Theorem & AVL Balance',
+    formulaNote: 'Check Case 2 log factor carefully on midterm proofs.',
+    formulas: [
+      { label: 'Master Theorem (Case 2)', expr: 'T(n) = aT(n/b) + Θ(n^c log^k n) -> Θ(n^c log^(k+1) n) when c = log_b(a)' },
+      { label: 'AVL Balance Factor', expr: 'BF(node) = height(left) - height(right) in {-1, 0, +1}' },
+    ],
+    pitfall: 'Common mark-loser: forgetting that Dijkstra fails when any reachable edge has a negative weight.',
+    quiz: {
+      question: 'Which recurrence gives T(n) = Θ(n log n) under the Master Theorem?',
+      options: ['T(n) = 2T(n/2) + n', 'T(n) = 4T(n/2) + n', 'T(n) = 2T(n/2) + n^2', 'T(n) = T(n-1) + n'],
+      correctIndex: 0,
+      explanation: 'a = 2, b = 2 so log_2(2) = 1. Since f(n) = Θ(n^1), Case 2 applies and gives Θ(n log n).',
+    },
+  },
+  discrete: {
+    meta: '4 days left · 2.5h/day',
+    rawTitle: 'MA102 · Discrete Math Outline',
+    rawSyllabus: 'Mod 1: Predicate Quantifiers, Contrapositive & Contradiction\nMod 2: Equivalence Relations, Reflexive/Symmetric/Transitive Proofs\nMod 3: Strong Induction & Linear Homogeneous Recurrences\nMod 4: Pigeonhole Principle & Inclusion-Exclusion Counting',
+    plan: [
+      { day: 'Day 1', topic: 'Quantifier Negation & Proof Patterns', duration: '40m', tag: 'High Priority', cls: 'is-amber' },
+      { day: 'Day 2', topic: 'Equivalence Classes & Hasse Diagrams', duration: '50m', tag: 'Scheduled', cls: '' },
+      { day: 'Day 3', topic: 'Pigeonhole & Inclusion-Exclusion Sets', duration: '55m', tag: 'High Priority', cls: 'is-amber' },
+      { day: 'Day 4', topic: 'Mixed Proof & Counting Drill', duration: '60m', tag: 'Final Drill', cls: 'is-lime' },
+    ],
+    formulaTitle: 'Counting & Recurrence Rules',
+    formulaNote: 'Always define your pigeons vs holes explicitly on paper.',
+    formulas: [
+      { label: 'Generalized Pigeonhole', expr: 'At least ceil(N / k) objects share one of k boxes' },
+      { label: 'Inclusion-Exclusion (3 sets)', expr: '|A U B U C| = Sum|A| - Sum|A n B| + |A n B n C|' },
+    ],
+    pitfall: 'Common mark-loser: claiming a relation is transitive without testing pairs (a, b) and (b, c) where a = c.',
+    quiz: {
+      question: 'Minimum students needed to guarantee at least 3 were born in the same month?',
+      options: ['24', '25', '26', '36'],
+      correctIndex: 1,
+      explanation: 'With 12 months, at most 2 * 12 = 24 avoid 3 per month. Adding 1 more (25) guarantees 3 in one month.',
+    },
+  },
+};
+
+// ── 3. Application State & Small Utilities ──────────────────────────────────
 const state = {
   user: null,
   authReady: false,
+  wtCourse: 'dsa',
+  wtStep: 0,
+  wtPicked: null,
   subjects: [],
   subjectsLoaded: false,
   activeSubjectId: null,
@@ -67,1418 +157,738 @@ const state = {
   activeSummaryId: null,
   quizzes: [],
   activeQuizId: null,
-  draftQuizAnswers: [],
-  flashcards: [],
-  flashcardMode: 'due',
-  flashcardIndex: 0,
-  flashcardFlipped: false,
-  flashcardShowHint: false,
-  uploadedFileData: null,
+  draftAnswers: [],
+  uploadedFile: null,
   unsubSubjects: null,
   unsubChildren: [],
 };
 
-// Utility functions
-function escapeHtml(str) {
-  return String(str ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const activeSubject = () => state.subjects.find((s) => s.id === state.activeSubjectId) || state.subjects[0] || null;
+const daysLeft = (d) => {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const t = new Date(`${d}T00:00:00`);
+  return Number.isNaN(t.getTime()) ? 0 : Math.max(0, Math.ceil((t - today) / 86400000));
+};
+const shortDate = (d) => (!d || Number.isNaN(new Date(`${d}T00:00:00`).getTime()))
+  ? (d || '') : new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+const defaultExamDate = () => new Date(Date.now() + 6 * 86400000).toISOString().slice(0, 10);
 
-function getDaysRemaining(examDate) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(`${examDate}T00:00:00`);
-  if (Number.isNaN(target.getTime())) return 0;
-  return Math.max(0, Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
-}
-
-function formatShortDate(dateStr) {
-  if (!dateStr) return '';
-  const d = new Date(`${dateStr}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return dateStr;
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-function getDefaultExamDate() {
-  const d = new Date();
-  d.setDate(d.getDate() + 6);
-  return d.toISOString().slice(0, 10);
+function setBanner(id, msg) {
+  const el = $(id);
+  if (!el) return;
+  el.textContent = msg || '';
+  el.hidden = !msg;
 }
 
 async function postJson(url, body) {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data.error || `Request failed (${res.status})`);
-  }
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
   return data;
 }
 
-function getActiveSubject() {
-  return state.subjects.find((s) => s.id === state.activeSubjectId) || state.subjects[0] || null;
+// ── 4. Firestore Mutations ──────────────────────────────────────────────────
+async function ensureProfile(user) {
+  const ref = doc(db, 'users', user.uid);
+  try {
+    if (!(await getDoc(ref)).exists()) {
+      await setDoc(ref, {
+        uid: user.uid,
+        displayName: clampText(user.displayName, 120, 'Student'),
+        email: clampText(user.email, 200, 'student@example.com'),
+        dailyStudyHours: 3,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  } catch (err) { handleDbError(err, 'write', `users/${user.uid}`); }
 }
 
-function showBanner(elId, message) {
-  const el = document.getElementById(elId);
-  if (!el) return;
-  if (message) {
-    el.textContent = message;
-    el.hidden = false;
-  } else {
-    el.textContent = '';
-    el.hidden = true;
-  }
+async function createSubject(uid, title, examDate, hours, parsed) {
+  const subjectId = makeId('sub');
+  const topics = (parsed.topics || []).slice(0, 35).map((t) => clampText(t, 150, 'Topic'));
+  const tasks = (parsed.tasks || []).slice(0, 30);
+
+  try {
+    await setDoc(doc(db, 'subjects', subjectId), {
+      userId: uid,
+      title: clampText(title, 120, 'Untitled Subject'),
+      examDate: clampText(examDate, 40, defaultExamDate()),
+      dailyHours: clampNum(hours, 0.5, 16, true),
+      syllabusOverview: clampText(parsed.syllabusOverview, 1500, 'Exam revision syllabus'),
+      topics,
+      totalTasks: tasks.length,
+      completedTasks: 0,
+      averageQuizScore: -1,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    if (tasks.length) {
+      const batch = writeBatch(db);
+      tasks.forEach((t, i) => {
+        const pri = ['high', 'medium', 'normal'].includes(t.priority) ? t.priority : 'medium';
+        batch.set(doc(db, 'studyTasks', makeId('tsk')), {
+          userId: uid,
+          subjectId,
+          topicTitle: clampText(t.topicTitle, 160, 'Revision Topic'),
+          description: clampText(t.description, 400, 'Review core concepts and practice problems.'),
+          scheduledDate: clampText(t.scheduledDate, 40, examDate),
+          durationMinutes: clampNum(t.durationMinutes, 10, 480),
+          priority: pri,
+          status: 'pending',
+          orderIndex: i,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      });
+      await batch.commit();
+    }
+    return subjectId;
+  } catch (err) { handleDbError(err, 'create', `subjects/${subjectId}`); }
 }
 
-// Clear subject-level Firestore listeners
-function clearSubjectSubscriptions() {
+async function toggleTask(task) {
+  const next = task.status === 'completed' ? 'pending' : 'completed';
+  try {
+    await updateDoc(doc(db, 'studyTasks', task.id), { status: next, updatedAt: serverTimestamp() });
+    const done = state.tasks.reduce((n, t) => n + ((t.id === task.id ? next : t.status) === 'completed' ? 1 : 0), 0);
+    await updateDoc(doc(db, 'subjects', task.subjectId), {
+      completedTasks: clampNum(done, 0, 500),
+      totalTasks: clampNum(state.tasks.length, 0, 500),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (err) { handleDbError(err, 'update', `studyTasks/${task.id}`); }
+}
+
+async function addTask(uid, subjectId, payload) {
+  const id = makeId('tsk');
+  try {
+    await setDoc(doc(db, 'studyTasks', id), {
+      userId: uid,
+      subjectId,
+      topicTitle: clampText(payload.topicTitle, 160, 'Custom Milestone'),
+      description: clampText(payload.description, 400, 'Complete focused revision session.'),
+      scheduledDate: clampText(payload.scheduledDate, 40, defaultExamDate()),
+      durationMinutes: clampNum(payload.durationMinutes, 10, 480),
+      priority: payload.priority,
+      status: 'pending',
+      orderIndex: clampNum(state.tasks.length, 0, 500),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    await updateDoc(doc(db, 'subjects', subjectId), {
+      totalTasks: clampNum(state.tasks.length + 1, 0, 500),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (err) { handleDbError(err, 'create', `studyTasks/${id}`); }
+}
+
+async function saveSummary(uid, subjectId, topicTitle, data) {
+  const id = makeId('sum');
+  try {
+    await setDoc(doc(db, 'studySummaries', id), {
+      userId: uid,
+      subjectId,
+      topicTitle: clampText(topicTitle, 160, 'Topic Summary'),
+      overview: clampText(data.overview, 2000, 'Summary generated.'),
+      coreConcepts: (data.coreConcepts || []).slice(0, 15).map((c) => clampText(c, 500, 'Key point')),
+      formulaSheet: (data.formulaSheet || []).slice(0, 15).map((f) => ({
+        label: clampText(f.label, 160, 'Rule'),
+        expression: clampText(f.expression, 300, '—'),
+        note: clampText(f.note, 400, 'Apply directly'),
+      })),
+      examPitfalls: (data.examPitfalls || []).slice(0, 12).map((p) => clampText(p, 400, 'Check edge cases')),
+      memoryAnchor: clampText(data.memoryAnchor, 600, ''),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return id;
+  } catch (err) { handleDbError(err, 'create', `studySummaries/${id}`); }
+}
+
+async function saveQuiz(uid, subjectId, topicTitle, difficulty, questions) {
+  const id = makeId('quz');
+  const qs = (questions || []).slice(0, 15).map((q) => {
+    const opts = (q.options || []).slice(0, 4).map((o) => clampText(o, 300, 'Option'));
+    while (opts.length < 4) opts.push('None of the above');
+    return {
+      prompt: clampText(q.prompt, 600, 'Question'),
+      options: opts,
+      correctIndex: clampNum(q.correctIndex, 0, 3),
+      explanation: clampText(q.explanation, 800, 'Review topic notes.'),
+    };
+  });
+  try {
+    await setDoc(doc(db, 'quizzes', id), {
+      userId: uid,
+      subjectId,
+      topicTitle: clampText(topicTitle, 160, 'Practice Quiz'),
+      difficulty,
+      questions: qs,
+      userAnswers: qs.map(() => -1),
+      scorePercent: -1,
+      status: 'in_progress',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return id;
+  } catch (err) { handleDbError(err, 'create', `quizzes/${id}`); }
+}
+
+async function gradeQuiz(quiz, answers) {
+  const correct = quiz.questions.filter((q, i) => answers[i] === q.correctIndex).length;
+  const score = Math.round((correct / Math.max(quiz.questions.length, 1)) * 100);
+  try {
+    await updateDoc(doc(db, 'quizzes', quiz.id), {
+      userAnswers: answers.slice(0, 15).map((a) => clampNum(a, -1, 3)),
+      scorePercent: clampNum(score, 0, 100),
+      status: 'completed',
+      updatedAt: serverTimestamp(),
+    });
+    const scores = state.quizzes
+      .filter((q) => q.id !== quiz.id && q.status === 'completed' && q.scorePercent >= 0)
+      .map((q) => q.scorePercent)
+      .concat(score);
+    const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+    await updateDoc(doc(db, 'subjects', quiz.subjectId), {
+      averageQuizScore: clampNum(avg, 0, 100, true),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (err) { handleDbError(err, 'update', `quizzes/${quiz.id}`); }
+}
+
+async function removeSubject(subjectId) {
+  try {
+    await Promise.all([
+      ...state.tasks.map((t) => deleteDoc(doc(db, 'studyTasks', t.id))),
+      ...state.summaries.map((s) => deleteDoc(doc(db, 'studySummaries', s.id))),
+      ...state.quizzes.map((q) => deleteDoc(doc(db, 'quizzes', q.id))),
+    ]);
+    await deleteDoc(doc(db, 'subjects', subjectId));
+  } catch (err) { handleDbError(err, 'delete', `subjects/${subjectId}`); }
+}
+
+// ── 5. Real-Time Subscriptions ──────────────────────────────────────────────
+function clearChildListeners() {
   state.unsubChildren.forEach((fn) => fn());
   state.unsubChildren = [];
 }
 
-function subscribeToActiveSubject(subjectId) {
-  clearSubjectSubscriptions();
+function subscribeSubjectData(subjectId) {
+  clearChildListeners();
   if (!state.user || !subjectId) {
-    state.tasks = [];
-    state.summaries = [];
-    state.quizzes = [];
-    state.flashcards = [];
-    renderWorkspace();
-    return;
+    state.tasks = []; state.summaries = []; state.quizzes = [];
+    return renderWorkspace();
   }
-
   const uid = state.user.uid;
-  const onErr = (err) => showBanner('sync-error-banner', `Cloud sync notice: ${err.message}`);
+  const onErr = (err) => setBanner('sync-error-banner', `Cloud sync notice: ${err.message}`);
 
   state.unsubChildren.push(
-    subscribeSubjectTasks(
-      uid,
-      subjectId,
-      (tasks) => {
-        state.tasks = tasks;
-        renderWorkspace();
-      },
-      onErr,
-    ),
-    subscribeSubjectSummaries(
-      uid,
-      subjectId,
-      (summaries) => {
-        state.summaries = summaries;
-        if (!state.activeSummaryId || !summaries.some((s) => s.id === state.activeSummaryId)) {
-          state.activeSummaryId = summaries[0]?.id ?? null;
-        }
-        renderWorkspace();
-      },
-      onErr,
-    ),
-    subscribeSubjectQuizzes(
-      uid,
-      subjectId,
-      (quizzes) => {
-        state.quizzes = quizzes;
-        if (!state.activeQuizId || !quizzes.some((q) => q.id === state.activeQuizId)) {
-          state.activeQuizId = quizzes[0]?.id ?? null;
-          const activeQ = quizzes.find((q) => q.id === state.activeQuizId);
-          state.draftQuizAnswers = activeQ ? activeQ.questions.map(() => -1) : [];
-        }
-        renderWorkspace();
-      },
-      onErr,
-    ),
-    subscribeSubjectFlashcards(
-      uid,
-      subjectId,
-      (cards) => {
-        state.flashcards = cards;
-        renderWorkspace();
-      },
-      onErr,
-    ),
+    listenCollection('studyTasks', [['userId', uid], ['subjectId', subjectId]], (items) => {
+      state.tasks = items.sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate) || a.orderIndex - b.orderIndex);
+      renderWorkspace();
+    }, onErr),
+    listenCollection('studySummaries', [['userId', uid], ['subjectId', subjectId]], (items) => {
+      state.summaries = items;
+      if (!state.summaries.some((s) => s.id === state.activeSummaryId)) state.activeSummaryId = items[0]?.id || null;
+      renderWorkspace();
+    }, onErr),
+    listenCollection('quizzes', [['userId', uid], ['subjectId', subjectId]], (items) => {
+      state.quizzes = items;
+      const cur = items.find((q) => q.id === state.activeQuizId) || items[0] || null;
+      if (!cur) { state.activeQuizId = null; state.draftAnswers = []; }
+      else if (cur.id !== state.activeQuizId) { state.activeQuizId = cur.id; state.draftAnswers = cur.userAnswers.slice(); }
+      renderWorkspace();
+    }, onErr),
   );
 }
 
-// Switch active tab and optionally pre-select a topic
-function setActiveTab(tab, preselectTopic) {
-  state.activeTab = tab;
+// ── 6. Landing Walkthrough & Workspace Renderers ────────────────────────────
+function renderWalkthrough() {
+  const c = WALKTHROUGH_DATA[state.wtCourse];
+  $('wt-meta-tag').textContent = c.meta;
+  document.querySelectorAll('.wt-course-btn').forEach((b) => b.classList.toggle('is-active', b.dataset.wtCourse === state.wtCourse));
+  document.querySelectorAll('.wt-step-btn').forEach((b) => b.classList.toggle('is-active', Number(b.dataset.wtStep) === state.wtStep));
 
-  document.querySelectorAll('.nav-tab, .mobile-tab').forEach((btn) => {
-    btn.classList.toggle('is-active', btn.dataset.tab === tab);
-  });
+  const nextBtn = state.wtStep < 3
+    ? `<button type="button" class="btn-primary-sm" data-wt-next>Next step &rarr;</button>`
+    : `<button type="button" class="btn-primary-sm" id="wt-start-btn">Try with your syllabus &rarr;</button>`;
 
-  ['overview', 'plan', 'summaries', 'quizzes', 'flashcards'].forEach((panelId) => {
-    const panel = document.getElementById(`panel-${panelId}`);
-    if (panel) panel.hidden = panelId !== tab;
-  });
-
-  if (preselectTopic) {
-    if (tab === 'summaries') {
-      const sel = document.getElementById('summary-topic-select');
-      if (sel && Array.from(sel.options).some((o) => o.value === preselectTopic)) {
-        sel.value = preselectTopic;
+  let body = '';
+  if (state.wtStep === 0) {
+    body = `<p class="small-strong">${esc(c.rawTitle)}</p><pre class="wt-raw-box">${esc(c.rawSyllabus)}</pre><p class="meta-text">No need to format bullets manually. Gemini extracts topics and weights priority.</p>`;
+  } else if (state.wtStep === 1) {
+    body = `<p class="small-strong">Generated Milestones</p><div class="stack-sm">${c.plan.map((p) =>
+      `<div class="wt-plan-row"><span class="mono-index ${p.cls}">${esc(p.day)}</span><span class="small-strong">${esc(p.topic)}</span><span class="meta-text tabular-nums">${esc(p.duration)} · ${esc(p.tag)}</span></div>`
+    ).join('')}</div>`;
+  } else if (state.wtStep === 2) {
+    body = `<div class="card-header"><span class="small-strong">${esc(c.formulaTitle)}</span><span class="meta-text">${esc(c.formulaNote)}</span></div>
+      ${c.formulas.map((f) => `<div class="formula-card"><span class="small-strong">${esc(f.label)}</span><div class="formula-expr">${esc(f.expr)}</div></div>`).join('')}
+      <p class="meta-text is-amber">${esc(c.pitfall)}</p>`;
+  } else {
+    const q = c.quiz;
+    body = `<p class="small-strong">${esc(q.question)}</p><div class="stack-sm">${q.options.map((opt, i) => {
+      let cls = 'quiz-option-btn';
+      if (state.wtPicked !== null) {
+        if (i === q.correctIndex) cls += ' is-correct';
+        else if (i === state.wtPicked) cls += ' is-wrong';
       }
-      const match = state.summaries.find(
-        (s) => s.topicTitle.toLowerCase() === preselectTopic.toLowerCase(),
-      );
-      if (match) state.activeSummaryId = match.id;
-    } else if (tab === 'quizzes') {
-      const sel = document.getElementById('quiz-topic-select');
-      if (sel && Array.from(sel.options).some((o) => o.value === preselectTopic)) {
-        sel.value = preselectTopic;
-      }
-    } else if (tab === 'flashcards') {
-      const sel = document.getElementById('flashcard-topic-select');
-      if (sel && Array.from(sel.options).some((o) => o.value === preselectTopic)) {
-        sel.value = preselectTopic;
-      }
-    }
+      return `<button type="button" class="${cls}" data-wt-opt="${i}"><span class="mono-index">${String.fromCharCode(65 + i)}.</span><span>${esc(opt)}</span></button>`;
+    }).join('')}</div>${state.wtPicked !== null ? `<div class="explanation-box">${esc(q.explanation)}</div>` : '<p class="meta-text">Pick an option to test instant grading.</p>'}`;
   }
 
-  renderWorkspace();
+  $('walkthrough-stage').innerHTML = `<div class="stack-sm">${body}</div>
+    <div class="wt-stage-footer"><span class="meta-text">Step 0${state.wtStep + 1} of 04</span>${nextBtn}</div>`;
 }
 
-// Populate topic dropdowns for Summaries, Quizzes, and Flashcards
-function syncTopicSelects(subject) {
-  const topics = subject.topics || [];
-
-  const sumSel = document.getElementById('summary-topic-select');
-  if (sumSel) {
-    const prev = sumSel.value;
-    sumSel.innerHTML =
-      topics.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('') +
-      '<option value="__custom__">Custom Topic...</option>';
-    if (prev && Array.from(sumSel.options).some((o) => o.value === prev)) {
-      sumSel.value = prev;
-    }
-  }
-
-  const quizSel = document.getElementById('quiz-topic-select');
-  if (quizSel) {
-    const prev = quizSel.value;
-    quizSel.innerHTML =
-      `<option value="Full ${escapeHtml(subject.title)} Review">Full Subject Review</option>` +
-      topics.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
-    if (prev && Array.from(quizSel.options).some((o) => o.value === prev)) {
-      quizSel.value = prev;
-    }
-  }
-
-  const cardSel = document.getElementById('flashcard-topic-select');
-  if (cardSel) {
-    const prev = cardSel.value;
-    cardSel.innerHTML =
-      topics.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('') +
-      `<option value="${escapeHtml(subject.title)}">General ${escapeHtml(subject.title)}</option>`;
-    if (prev && Array.from(cardSel.options).some((o) => o.value === prev)) {
-      cardSel.value = prev;
-    }
-  }
-}
-
-// Main UI Render Dispatcher
 function renderApp() {
-  const bootLoader = document.getElementById('boot-loader');
-  const landingView = document.getElementById('landing-view');
-  const workspaceView = document.getElementById('workspace-view');
-  const landingNav = document.getElementById('landing-nav');
-  const workspaceNav = document.getElementById('workspace-nav');
-  const mobileNav = document.getElementById('mobile-workspace-nav');
-  const primaryBtn = document.getElementById('primary-action-btn');
+  $('boot-loader').hidden = state.authReady;
+  if (!state.authReady) { $('landing-view').hidden = true; $('workspace-view').hidden = true; return; }
 
-  if (!state.authReady) {
-    bootLoader.hidden = false;
-    landingView.hidden = true;
-    workspaceView.hidden = true;
-    return;
+  const signedIn = Boolean(state.user);
+  $('landing-view').hidden = signedIn;
+  $('workspace-view').hidden = !signedIn;
+  $('landing-nav').hidden = signedIn;
+  $('workspace-nav').hidden = !signedIn;
+  $('mobile-workspace-nav').hidden = !signedIn;
+  $('primary-action-btn').textContent = signedIn ? '+ New Subject' : 'Sign In';
+
+  if (!signedIn) renderWalkthrough();
+  else {
+    $('user-display-name').textContent = state.user.displayName || 'Student';
+    $('user-email').textContent = state.user.email || '';
+    $('mobile-user-email').textContent = state.user.email || '';
+    $('welcome-heading').textContent = `Ready to plan, ${(state.user.displayName || 'Student').split(' ')[0]}?`;
+    renderWorkspace();
   }
-
-  bootLoader.hidden = true;
-
-  if (!state.user) {
-    landingView.hidden = false;
-    workspaceView.hidden = true;
-    landingNav.hidden = false;
-    workspaceNav.hidden = true;
-    mobileNav.hidden = true;
-    primaryBtn.textContent = 'Sign In';
-    return;
-  }
-
-  landingView.hidden = true;
-  workspaceView.hidden = false;
-  landingNav.hidden = true;
-  workspaceNav.hidden = false;
-  mobileNav.hidden = state.subjects.length === 0;
-  primaryBtn.textContent = '+ Add Subject';
-
-  document.getElementById('user-display-name').textContent = state.user.displayName || 'Student';
-  document.getElementById('user-email').textContent = state.user.email || '';
-  document.getElementById('mobile-user-email').textContent = state.user.email || '';
-
-  const firstName = (state.user.displayName || 'Student').split(' ')[0];
-  document.getElementById('welcome-heading').textContent = `Welcome to your revision desk, ${firstName}`;
-
-  renderWorkspace();
 }
 
 function renderWorkspace() {
   if (!state.user) return;
+  const sub = activeSubject();
+  $('subject-count').textContent = String(state.subjects.length);
 
-  // Render sidebar subjects
-  document.getElementById('subject-count').textContent = String(state.subjects.length);
-  const subjectListEl = document.getElementById('subject-list');
+  // Sidebar subjects
+  $('subject-list').innerHTML = state.subjects.map((s) => {
+    const pct = s.totalTasks > 0 ? Math.round((s.completedTasks / s.totalTasks) * 100) : 0;
+    return `<button type="button" class="subject-item ${sub?.id === s.id ? 'is-selected' : ''}" data-select-subject="${esc(s.id)}">
+      <div class="subject-item-top"><span class="subject-item-name">${esc(s.title)}</span><span class="mono-index ${daysLeft(s.examDate) <= 3 ? 'is-amber' : 'is-lime'}">${daysLeft(s.examDate)}d</span></div>
+      <div class="progress-track progress-track-sm"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div class="subject-item-meta"><span>${s.completedTasks}/${s.totalTasks} done</span><span>${s.averageQuizScore >= 0 ? `${Math.round(s.averageQuizScore)}% avg` : 'no quiz'}</span></div>
+    </button>`;
+  }).join('') || `<p class="meta-text">No subjects yet.</p>`;
 
-  if (state.subjects.length === 0) {
-    subjectListEl.innerHTML =
-      '<p class="meta-text">No subjects added yet. Add your first syllabus to generate a revision schedule.</p>';
-  } else {
-    subjectListEl.innerHTML = state.subjects
-      .map((subj) => {
-        const isSelected = subj.id === state.activeSubjectId;
-        const daysLeft = getDaysRemaining(subj.examDate);
-        const pct = subj.totalTasks > 0 ? Math.round((subj.completedTasks / subj.totalTasks) * 100) : 0;
-        return `
-          <button type="button" class="subject-item ${isSelected ? 'is-selected' : ''}" data-subject-id="${escapeHtml(subj.id)}">
-            <div class="subject-item-top">
-              <span class="subject-item-name">${escapeHtml(subj.title)}</span>
-              <span class="subject-item-days ${daysLeft <= 2 ? 'is-urgent' : ''}">${daysLeft}d</span>
-            </div>
-            <div class="subject-item-meta">
-              <span>${escapeHtml(formatShortDate(subj.examDate))}</span>
-              <span>${pct}% done</span>
-            </div>
-            <div class="progress-track progress-track-sm">
-              <div class="progress-fill" style="width: ${pct}%"></div>
-            </div>
-          </button>
-        `;
-      })
-      .join('');
-  }
-
-  document.querySelectorAll('.nav-tab').forEach((btn) => {
-    btn.disabled = state.subjects.length === 0 && btn.dataset.tab !== 'overview';
+  const hasSub = Boolean(sub);
+  $('empty-subjects-state').hidden = !state.subjectsLoaded || hasSub;
+  $('subject-workspace').hidden = !hasSub;
+  document.querySelectorAll('.nav-tab, .mobile-tab').forEach((b) => {
+    b.disabled = !hasSub;
+    b.classList.toggle('is-active', b.dataset.tab === state.activeTab);
   });
-  document.getElementById('mobile-workspace-nav').hidden = state.subjects.length === 0;
+  if (!sub) return;
 
-  const subject = getActiveSubject();
-  const emptyState = document.getElementById('empty-subjects-state');
-  const subjectWorkspace = document.getElementById('subject-workspace');
+  // Header & 3 KPIs
+  const done = state.tasks.filter((t) => t.status === 'completed').length;
+  const total = state.tasks.length;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const graded = state.quizzes.filter((q) => q.status === 'completed' && q.scorePercent >= 0);
+  const avgQuiz = graded.length ? `${Math.round(graded.reduce((a, q) => a + q.scorePercent, 0) / graded.length)}%` : '—';
 
-  if (!state.subjectsLoaded) {
-    emptyState.hidden = true;
-    subjectWorkspace.hidden = true;
-    return;
-  }
+  $('subject-title-heading').textContent = sub.title;
+  $('subject-meta-line').textContent = `Exam ${shortDate(sub.examDate)} · ${sub.dailyHours}h/day · ${sub.topics.length} topics`;
+  $('readiness-percent').textContent = `${pct}%`;
+  $('readiness-bar-fill').style.width = `${pct}%`;
+  $('kpi-days').textContent = `${daysLeft(sub.examDate)}d`;
+  $('kpi-milestones').textContent = `${done}/${total}`;
+  $('kpi-quiz-avg').textContent = avgQuiz;
 
-  if (!subject) {
-    emptyState.hidden = false;
-    subjectWorkspace.hidden = true;
-    return;
-  }
+  // Toggle active tab panel
+  ['overview', 'plan', 'summaries', 'quizzes'].forEach((t) => { $(`panel-${t}`).hidden = state.activeTab !== t; });
 
-  emptyState.hidden = true;
-  subjectWorkspace.hidden = false;
-
-  syncTopicSelects(subject);
-
-  // Header & KPI Strip
-  const daysLeft = getDaysRemaining(subject.examDate);
-  const completedTasks = state.tasks.filter((t) => t.status === 'completed').length;
-  const totalTasks = state.tasks.length;
-  const milestoneRatio = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
-  const completedQuizzes = state.quizzes.filter((q) => q.status === 'completed' && q.scorePercent >= 0);
-  const avgQuiz =
-    completedQuizzes.length > 0
-      ? Math.round(completedQuizzes.reduce((sum, q) => sum + q.scorePercent, 0) / completedQuizzes.length)
-      : null;
-
-  const masteredCards = state.flashcards.filter((c) => c.masteryState === 'mastered').length;
-  const totalCards = state.flashcards.length;
-
-  const quizScoreFactor = avgQuiz !== null ? avgQuiz : milestoneRatio;
-  const cardScoreFactor =
-    totalCards > 0 ? Math.round((masteredCards / totalCards) * 100) : milestoneRatio;
-  const readinessPercent =
-    totalTasks === 0 && completedQuizzes.length === 0 && totalCards === 0
-      ? 0
-      : Math.round(milestoneRatio * 0.6 + quizScoreFactor * 0.25 + cardScoreFactor * 0.15);
-
-  document.getElementById('subject-meta-line').textContent =
-    `Exam ${formatShortDate(subject.examDate)} · ${subject.dailyHours}h/day pace · ${subject.topics.length} syllabus topics`;
-  document.getElementById('subject-title-heading').textContent = subject.title;
-  document.getElementById('readiness-percent').textContent = `${readinessPercent}%`;
-  document.getElementById('readiness-bar-fill').style.width = `${readinessPercent}%`;
-
-  const kpiDays = document.getElementById('kpi-days');
-  kpiDays.textContent = `${daysLeft}d`;
-  kpiDays.style.color = daysLeft <= 2 ? 'var(--amber)' : 'var(--ink)';
-  document.getElementById('kpi-urgent-label').hidden = daysLeft > 2;
-  document.getElementById('kpi-milestones').textContent = `${completedTasks}/${totalTasks}`;
-  document.getElementById('kpi-quiz-avg').textContent = avgQuiz !== null ? `${avgQuiz}%` : '—';
-  document.getElementById('kpi-cards-mastered').textContent = `${masteredCards}/${totalCards}`;
-
-  if (state.activeTab === 'overview') renderOverviewTab(subject);
-  if (state.activeTab === 'plan') renderPlanTab();
-  if (state.activeTab === 'summaries') renderSummariesTab();
-  if (state.activeTab === 'quizzes') renderQuizzesTab();
-  if (state.activeTab === 'flashcards') renderFlashcardsTab();
+  if (state.activeTab === 'overview') renderOverview(sub);
+  else if (state.activeTab === 'plan') renderPlan();
+  else if (state.activeTab === 'summaries') renderSummaries(sub);
+  else renderQuizzes(sub);
 }
 
-function renderOverviewTab(subject) {
-  document.getElementById('overview-sheets-count').textContent = `${state.summaries.length} sheets saved`;
-  document.getElementById('overview-syllabus-text').textContent = subject.syllabusOverview;
+function renderOverview(sub) {
+  $('overview-syllabus-text').textContent = sub.syllabusOverview || 'No overview saved.';
+  $('overview-sheets-count').textContent = `${state.summaries.length} sheets saved`;
 
-  const topicsEl = document.getElementById('overview-topics-list');
-  if (!subject.topics.length) {
-    topicsEl.innerHTML = '<p class="task-row muted-text">No topics extracted yet.</p>';
-  } else {
-    topicsEl.innerHTML = subject.topics
-      .map(
-        (topic, idx) => `
-        <div class="topic-row">
-          <div class="topic-left">
-            <span class="mono-index">${String(idx + 1).padStart(2, '0')}.</span>
-            <span class="topic-name">${escapeHtml(topic)}</span>
-          </div>
-          <div class="topic-actions">
-            <button type="button" class="link-btn jump-tool-btn" data-tab="summaries" data-topic="${escapeHtml(topic)}">Summary</button>
-            <span class="sep" aria-hidden="true">·</span>
-            <button type="button" class="link-btn jump-tool-btn" data-tab="quizzes" data-topic="${escapeHtml(topic)}">Quiz</button>
-            <span class="sep" aria-hidden="true">·</span>
-            <button type="button" class="link-btn jump-tool-btn" data-tab="flashcards" data-topic="${escapeHtml(topic)}">Cards</button>
-          </div>
-        </div>
-      `,
-      )
-      .join('');
-  }
-
-  const nextTasksEl = document.getElementById('overview-next-tasks');
-  const pending = state.tasks.filter((t) => t.status === 'pending').slice(0, 5);
-  if (pending.length === 0) {
-    nextTasksEl.innerHTML =
-      '<div class="task-row"><p class="muted-text">All scheduled milestones completed! Try an intensive practice quiz.</p></div>';
-  } else {
-    nextTasksEl.innerHTML = pending
-      .map(
-        (task) => `
-        <div class="task-row">
-          <div class="task-main">
-            <button type="button" class="task-check-btn" data-task-id="${escapeHtml(task.id)}" aria-label="Mark ${escapeHtml(task.topicTitle)} complete"></button>
-            <div>
-              <p class="task-title">${escapeHtml(task.topicTitle)}</p>
-              <p class="task-desc">${escapeHtml(task.description)}</p>
-              <p class="task-meta">${escapeHtml(formatShortDate(task.scheduledDate))} · ${task.durationMinutes} min · ${escapeHtml(task.priority)} priority</p>
-            </div>
-          </div>
-        </div>
-      `,
-      )
-      .join('');
-  }
-}
-
-function renderPlanTab() {
-  const listEl = document.getElementById('plan-tasks-list');
-  const filtered = state.tasks.filter((t) => {
-    if (state.planFilter === 'pending') return t.status === 'pending';
-    if (state.planFilter === 'completed') return t.status === 'completed';
-    return true;
-  });
-
-  if (filtered.length === 0) {
-    listEl.innerHTML = '<div class="task-row"><p class="muted-text">No milestones match this filter.</p></div>';
-    return;
-  }
-
-  listEl.innerHTML = filtered
-    .map((task) => {
-      const done = task.status === 'completed';
-      return `
-        <div class="task-row">
-          <div class="task-main">
-            <button
-              type="button"
-              class="task-check-btn ${done ? 'is-done' : ''}"
-              data-task-id="${escapeHtml(task.id)}"
-              aria-label="Toggle ${escapeHtml(task.topicTitle)}"
-            >${done ? '&#10003;' : ''}</button>
-            <div>
-              <p class="task-title ${done ? 'is-done' : ''}">${escapeHtml(task.topicTitle)}</p>
-              <p class="task-desc">${escapeHtml(task.description)}</p>
-              <p class="task-meta">
-                ${escapeHtml(formatShortDate(task.scheduledDate))} · ${task.durationMinutes} min ·
-                <span class="${task.priority === 'high' && !done ? 'priority-high' : ''}">${escapeHtml(task.priority)} priority</span>
-              </p>
-            </div>
-          </div>
-          <div class="topic-actions">
-            <button type="button" class="link-btn jump-tool-btn" data-tab="summaries" data-topic="${escapeHtml(task.topicTitle)}">Study Sheet</button>
-            <span class="sep" aria-hidden="true">·</span>
-            <button type="button" class="link-btn jump-tool-btn" data-tab="quizzes" data-topic="${escapeHtml(task.topicTitle)}">Practice Quiz</button>
-          </div>
-        </div>
-      `;
-    })
-    .join('');
-}
-
-function renderSummariesTab() {
-  const container = document.getElementById('summaries-container');
-  if (state.summaries.length === 0) {
-    container.innerHTML = `
-      <div class="empty-card">
-        <h3 class="card-title">No study sheets saved yet</h3>
-        <p class="muted-text max-w-prose">Pick a syllabus topic above and click Generate Study Sheet for key concepts, formulas, common traps, and memory anchors.</p>
+  $('overview-topics-list').innerHTML = sub.topics.map((t, i) => `
+    <div class="topic-row">
+      <div class="topic-left"><span class="mono-index">${String(i + 1).padStart(2, '0')}</span><span class="topic-name">${esc(t)}</span></div>
+      <div class="btn-group">
+        <button type="button" class="link-btn" data-jump-summary="${esc(t)}">Sheet</button>
+        <span class="sep">·</span>
+        <button type="button" class="link-btn is-amber" data-jump-quiz="${esc(t)}">Quiz</button>
       </div>
-    `;
+    </div>`).join('') || `<p class="muted-text" style="padding:18px 22px">No topics parsed.</p>`;
+
+  const upcoming = state.tasks.filter((t) => t.status === 'pending').slice(0, 5);
+  $('overview-next-tasks').innerHTML = upcoming.map((t) => `
+    <div class="task-row">
+      <div class="task-main">
+        <button type="button" class="task-check-btn" data-toggle-task="${esc(t.id)}" aria-label="Mark done"></button>
+        <div><p class="task-title">${esc(t.topicTitle)}</p><p class="meta-text">${esc(shortDate(t.scheduledDate))} · ${t.durationMinutes}m</p></div>
+      </div>
+    </div>`).join('') || `<p class="muted-text" style="padding:18px 22px">All milestones finished.</p>`;
+}
+
+function renderPlan() {
+  document.querySelectorAll('#plan-filter-group .seg-btn').forEach((b) => b.classList.toggle('is-active', b.dataset.filter === state.planFilter));
+  const list = state.tasks.filter((t) => state.planFilter === 'all' || t.status === state.planFilter);
+
+  $('plan-tasks-list').innerHTML = list.map((t) => {
+    const done = t.status === 'completed';
+    const priCls = t.priority === 'high' ? 'is-amber' : t.priority === 'medium' ? 'is-lime' : '';
+    return `<div class="task-row">
+      <div class="task-main">
+        <button type="button" class="task-check-btn ${done ? 'is-done' : ''}" data-toggle-task="${esc(t.id)}" aria-label="Toggle milestone">${done ? '&#10003;' : ''}</button>
+        <div>
+          <p class="task-title ${done ? 'is-done' : ''}">${esc(t.topicTitle)}</p>
+          <p class="muted-text">${esc(t.description)}</p>
+        </div>
+      </div>
+      <div class="btn-group" style="flex-shrink:0">
+        <span class="mono-index ${priCls}">${esc(t.priority)}</span>
+        <span class="mono-index">${esc(shortDate(t.scheduledDate))} · ${t.durationMinutes}m</span>
+      </div>
+    </div>`;
+  }).join('') || `<p class="muted-text" style="padding:24px 22px">No milestones match this filter.</p>`;
+}
+
+function populateTopics(selectId, sub, includeAll = false) {
+  const el = $(selectId);
+  const prev = el.value;
+  const opts = [];
+  if (includeAll) opts.push(`<option value="Comprehensive Subject Mock">All Topics (Mock)</option>`);
+  sub.topics.forEach((t) => opts.push(`<option value="${esc(t)}">${esc(t)}</option>`));
+  if (!includeAll) opts.push(`<option value="__custom__">Custom Topic...</option>`);
+  el.innerHTML = opts.join('');
+  if (prev && [...el.options].some((o) => o.value === prev)) el.value = prev;
+}
+
+function renderSummaries(sub) {
+  populateTopics('summary-topic-select', sub);
+  $('summary-custom-topic').hidden = $('summary-topic-select').value !== '__custom__';
+
+  if (!state.summaries.length) {
+    $('summaries-container').innerHTML = `<div class="card"><p class="muted-text">Pick a topic above and click Make Study Sheet to generate concepts, formulas, and exam pitfalls.</p></div>`;
     return;
   }
 
-  const active =
-    state.summaries.find((s) => s.id === state.activeSummaryId) || state.summaries[0];
-
-  container.innerHTML = `
-    <div class="split-workspace">
-      <div class="history-list">
-        <div class="history-header">Saved Sheets (${state.summaries.length})</div>
-        ${state.summaries
-          .map(
-            (s) => `
-          <button type="button" class="history-item ${s.id === active.id ? 'is-selected' : ''}" data-summary-id="${escapeHtml(s.id)}">
-            <span class="small-strong">${escapeHtml(s.topicTitle)}</span>
-            <span class="meta-text tabular-nums">${s.coreConcepts.length} concepts · ${s.formulaSheet.length} formulas</span>
-          </button>
-        `,
-          )
-          .join('')}
-      </div>
-
-      <article class="card">
-        <div class="card-header" style="border-bottom: 1px solid var(--border); padding-bottom: 16px;">
-          <div>
-            <p class="accent-label">High-Yield Revision Brief</p>
-            <h3 class="section-title-sm">${escapeHtml(active.topicTitle)}</h3>
-          </div>
-          <div class="btn-group">
-            <button type="button" class="btn-secondary-sm jump-tool-btn" data-tab="quizzes" data-topic="${escapeHtml(active.topicTitle)}">Quiz Topic</button>
-            <button type="button" class="btn-secondary-sm jump-tool-btn" data-tab="flashcards" data-topic="${escapeHtml(active.topicTitle)}">Make Cards</button>
-          </div>
-        </div>
-
-        <div>
-          <p class="small-strong" style="margin-bottom: 6px;">Executive Overview</p>
-          <p class="body-copy">${escapeHtml(active.overview)}</p>
-        </div>
-
-        <div>
-          <p class="small-strong" style="margin-bottom: 8px;">Core Exam Concepts</p>
-          <div style="display: flex; flex-direction: column; gap: 8px;">
-            ${active.coreConcepts
-              .map(
-                (c, i) => `
-              <div style="display: flex; gap: 10px; font-size: 0.9rem;">
-                <span class="mono-index">${String(i + 1).padStart(2, '0')}.</span>
-                <span>${escapeHtml(c)}</span>
-              </div>
-            `,
-              )
-              .join('')}
-          </div>
-        </div>
-
-        ${
-          active.formulaSheet.length > 0
-            ? `
-          <div>
-            <p class="small-strong" style="margin-bottom: 10px;">Key Formulas &amp; Decision Rules</p>
-            <div class="formula-grid">
-              ${active.formulaSheet
-                .map(
-                  (f) => `
-                <div class="formula-card">
-                  <span class="meta-text">${escapeHtml(f.label)}</span>
-                  <code class="formula-expr">${escapeHtml(f.expression)}</code>
-                  <span class="meta-text">${escapeHtml(f.note)}</span>
-                </div>
-              `,
-                )
-                .join('')}
-            </div>
-          </div>
-        `
-            : ''
-        }
-
-        <div class="pitfall-anchor-grid">
-          <div>
-            <p class="small-strong" style="color: var(--amber); margin-bottom: 8px;">Common Exam Pitfalls</p>
-            <ul style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 0.875rem;">
-              ${active.examPitfalls.map((p) => `<li>${escapeHtml(p)}</li>`).join('')}
-            </ul>
-          </div>
-          ${
-            active.memoryAnchor
-              ? `
-            <div class="memory-box">
-              <p class="small-strong" style="color: var(--accent); margin-bottom: 6px;">Memory Anchor</p>
-              <p style="font-size: 0.875rem;">${escapeHtml(active.memoryAnchor)}</p>
-            </div>
-          `
-              : ''
-          }
-        </div>
-      </article>
+  const active = state.summaries.find((s) => s.id === state.activeSummaryId) || state.summaries[0];
+  $('summaries-container').innerHTML = `<div class="split-workspace">
+    <div class="history-list">
+      <div class="history-header">Saved Sheets (${state.summaries.length})</div>
+      ${state.summaries.map((s) => `<button type="button" class="history-item ${s.id === active.id ? 'is-selected' : ''}" data-select-summary="${esc(s.id)}">
+        <span class="small-strong">${esc(s.topicTitle)}</span>
+        <span class="meta-text">${s.formulaSheet.length} formulas · ${s.coreConcepts.length} concepts</span>
+      </button>`).join('')}
     </div>
-  `;
+    <article class="card">
+      <h3 class="section-title-sm">${esc(active.topicTitle)}</h3>
+      <p class="body-copy">${esc(active.overview)}</p>
+      <div class="stack-sm">
+        <span class="small-strong">Core Concepts</span>
+        ${active.coreConcepts.map((c, i) => `<p class="muted-text"><span class="mono-index is-lime">${i + 1}.</span> ${esc(c)}</p>`).join('')}
+      </div>
+      ${active.formulaSheet.length ? `<div class="stack-sm"><span class="small-strong">Formula &amp; Rule Sheet</span>
+        <div class="formula-grid">${active.formulaSheet.map((f) => `<div class="formula-card"><span class="small-strong">${esc(f.label)}</span><div class="formula-expr">${esc(f.expression)}</div><span class="meta-text">${esc(f.note)}</span></div>`).join('')}</div>
+      </div>` : ''}
+      <div class="pitfall-anchor-grid">
+        <div class="stack-sm"><span class="small-strong is-amber">Exam Pitfalls</span>${active.examPitfalls.map((p) => `<p class="muted-text">- ${esc(p)}</p>`).join('')}</div>
+        <div class="memory-box stack-sm"><span class="small-strong is-lime">Quick Memory Hook</span><p class="body-copy">${esc(active.memoryAnchor || 'Review step-by-step derivations.')}</p></div>
+      </div>
+    </article>
+  </div>`;
 }
 
-function renderQuizzesTab() {
-  const drillBtn = document.getElementById('drill-weak-btn');
-  const hasMissed = state.quizzes.some(
-    (q) => q.status === 'completed' && q.questions.some((qq, idx) => q.userAnswers[idx] !== qq.correctIndex),
-  );
-  drillBtn.hidden = !hasMissed;
+function renderQuizzes(sub) {
+  populateTopics('quiz-topic-select', sub, true);
+  const weakTopics = [...new Set(state.quizzes.filter((q) => q.status === 'completed').flatMap((q) =>
+    q.questions.some((qs, i) => q.userAnswers[i] !== qs.correctIndex) ? [q.topicTitle] : []
+  ))];
+  $('drill-weak-btn').hidden = !weakTopics.length;
 
-  const container = document.getElementById('quizzes-container');
-  if (state.quizzes.length === 0) {
-    container.innerHTML = `
-      <div class="empty-card">
-        <h3 class="card-title">Test your recall before exam day</h3>
-        <p class="muted-text max-w-prose">Generate an adaptive practice quiz for any topic or run a full-subject mock with instant step-by-step explanations.</p>
-      </div>
-    `;
+  if (!state.quizzes.length) {
+    $('quizzes-container').innerHTML = `<div class="card"><p class="muted-text">Choose a topic and click Start Quiz to test yourself with instant grading.</p></div>`;
     return;
   }
 
   const active = state.quizzes.find((q) => q.id === state.activeQuizId) || state.quizzes[0];
-  const isCompleted = active.status === 'completed';
-  if (!isCompleted && state.draftQuizAnswers.length !== active.questions.length) {
-    state.draftQuizAnswers = active.questions.map(() => -1);
-  }
-  const answeredCount = state.draftQuizAnswers.filter((a) => a >= 0).length;
+  const done = active.status === 'completed';
+  const allPicked = active.questions.every((_, i) => state.draftAnswers[i] >= 0);
 
-  container.innerHTML = `
-    <div class="split-workspace">
-      <div class="history-list">
-        <div class="history-header">Quiz Sessions (${state.quizzes.length})</div>
-        ${state.quizzes
-          .map(
-            (q) => `
-          <button type="button" class="history-item ${q.id === active.id ? 'is-selected' : ''}" data-quiz-id="${escapeHtml(q.id)}">
-            <div class="history-item-top">
-              <span class="small-strong truncate">${escapeHtml(q.topicTitle)}</span>
-              <span class="mono-index" style="color: var(--accent); font-weight: 600;">${
-                q.status === 'completed' ? `${q.scorePercent}%` : 'Active'
-              }</span>
-            </div>
-            <span class="meta-text" style="text-transform: capitalize;">${escapeHtml(q.difficulty)} · ${q.questions.length} questions</span>
-          </button>
-        `,
-          )
-          .join('')}
-      </div>
-
-      <div style="display: flex; flex-direction: column; gap: 16px;">
-        <div class="card" style="flex-direction: row; align-items: center; justify-content: space-between;">
-          <div>
-            <h3 class="card-title">${escapeHtml(active.topicTitle)}</h3>
-            <p class="meta-text tabular-nums" style="text-transform: capitalize;">${escapeHtml(active.difficulty)} mode · ${active.questions.length} questions</p>
-          </div>
-          ${
-            isCompleted
-              ? `
-            <div class="btn-group">
-              <div style="text-align: right;">
-                <p class="meta-text">Final Score</p>
-                <p class="kpi-value" style="color: var(--accent);">${active.scorePercent}%</p>
-              </div>
-              <button type="button" class="btn-secondary-sm jump-tool-btn" data-tab="summaries" data-topic="${escapeHtml(active.topicTitle)}">Review Notes</button>
-            </div>
-          `
-              : `
-            <div style="text-align: right;">
-              <p class="meta-text">Progress</p>
-              <p class="mono-value tabular-nums">${answeredCount}/${active.questions.length} answered</p>
-            </div>
-          `
-          }
-        </div>
-
-        ${active.questions
-          .map((question, qIdx) => {
-            const chosen = isCompleted ? active.userAnswers[qIdx] : state.draftQuizAnswers[qIdx];
-            const isCorrect = isCompleted && chosen === question.correctIndex;
-            return `
-            <div class="quiz-question-card">
-              <div class="card-header" style="align-items: flex-start;">
-                <div style="display: flex; gap: 10px; align-items: baseline;">
-                  <span class="mono-index">Q${qIdx + 1}.</span>
-                  <p style="font-weight: 500; font-size: 0.95rem;">${escapeHtml(question.prompt)}</p>
-                </div>
-                ${
-                  isCompleted
-                    ? `<span style="font-size: 0.78rem; font-weight: 600; color: ${
-                        isCorrect ? 'var(--accent)' : 'var(--amber)'
-                      }; white-space: nowrap;">${isCorrect ? '&#10003; Correct' : '&#10005; Missed'}</span>`
-                    : ''
-                }
-              </div>
-
-              <div style="display: flex; flex-direction: column; gap: 8px;">
-                ${question.options
-                  .map((opt, optIdx) => {
-                    let cls = '';
-                    if (isCompleted) {
-                      if (optIdx === question.correctIndex) cls = 'is-correct';
-                      else if (chosen === optIdx) cls = 'is-wrong';
-                    } else if (chosen === optIdx) {
-                      cls = 'is-selected';
-                    }
-                    return `
-                    <button
-                      type="button"
-                      class="quiz-option-btn ${cls}"
-                      data-q-idx="${qIdx}"
-                      data-opt-idx="${optIdx}"
-                      ${isCompleted ? 'disabled' : ''}
-                    >
-                      <span class="mono-index">${String.fromCharCode(65 + optIdx)}.</span>
-                      <span>${escapeHtml(opt)}</span>
-                    </button>
-                  `;
-                  })
-                  .join('')}
-              </div>
-
-              ${
-                isCompleted
-                  ? `<div class="explanation-box"><strong>Explanation:</strong> ${escapeHtml(question.explanation)}</div>`
-                  : ''
-              }
-            </div>
-          `;
-          })
-          .join('')}
-
-        ${
-          !isCompleted
-            ? `
-          <div style="display: flex; justify-content: flex-end;">
-            <button type="button" id="submit-quiz-btn" class="btn-primary btn-lg">Submit &amp; Grade Quiz</button>
-          </div>
-        `
-            : ''
-        }
-      </div>
+  $('quizzes-container').innerHTML = `<div class="split-workspace">
+    <div class="history-list">
+      <div class="history-header">Quiz Attempts (${state.quizzes.length})</div>
+      ${state.quizzes.map((q) => `<button type="button" class="history-item ${q.id === active.id ? 'is-selected' : ''}" data-select-quiz="${esc(q.id)}">
+        <span class="small-strong">${esc(q.topicTitle)}</span>
+        <span class="meta-text">${q.status === 'completed' ? `Score: ${q.scorePercent}%` : 'In progress'} · ${q.questions.length} Qs</span>
+      </button>`).join('')}
     </div>
-  `;
-}
-
-function renderFlashcardsTab() {
-  const container = document.getElementById('flashcards-container');
-  if (state.flashcards.length === 0) {
-    container.innerHTML = `
-      <div class="empty-card">
-        <h3 class="card-title">No flashcards in this subject yet</h3>
-        <p class="muted-text max-w-prose">Pick a syllabus topic above and generate an 8-card spaced-repetition deck.</p>
+    <div class="card">
+      <div class="card-header">
+        <div><h3 class="section-title-sm">${esc(active.topicTitle)}</h3><p class="meta-text">${esc(active.difficulty)} · ${active.questions.length} questions</p></div>
+        ${done ? `<span class="kpi-value ${active.scorePercent >= 70 ? 'is-lime' : 'is-amber'}">${active.scorePercent}%</span>` : ''}
       </div>
-    `;
-    return;
-  }
-
-  const now = Date.now();
-  const dueCards = state.flashcards.filter((c) => c.nextReviewAt <= now);
-  const deck =
-    state.flashcardMode === 'due' && dueCards.length > 0 ? dueCards : state.flashcards;
-
-  if (state.flashcardIndex >= deck.length) state.flashcardIndex = 0;
-  const card = deck[state.flashcardIndex];
-  const masteredCount = state.flashcards.filter((c) => c.masteryState === 'mastered').length;
-
-  container.innerHTML = `
-    <div style="display: flex; flex-direction: column; gap: 24px;">
-      <div class="card-header" style="flex-wrap: wrap;">
-        <div class="segmented-control">
-          <button type="button" class="seg-btn flashcard-mode-btn ${state.flashcardMode === 'due' ? 'is-active' : ''}" data-mode="due">
-            Due Now (${dueCards.length})
-          </button>
-          <button type="button" class="seg-btn flashcard-mode-btn ${state.flashcardMode === 'all' ? 'is-active' : ''}" data-mode="all">
-            All Cards (${state.flashcards.length})
-          </button>
-        </div>
-        <span class="meta-text tabular-nums" style="font-family: var(--font-mono);">
-          Card ${state.flashcardIndex + 1} of ${deck.length} · ${masteredCount}/${state.flashcards.length} mastered
-        </span>
+      <div class="stack-md">
+        ${active.questions.map((q, qi) => {
+          const picked = done ? active.userAnswers[qi] : state.draftAnswers[qi];
+          return `<div class="stack-sm" style="padding-top:14px;border-top:1px solid var(--border-soft)">
+            <p class="small-strong"><span class="mono-index">Q${qi + 1}.</span> ${esc(q.prompt)}</p>
+            ${q.options.map((opt, oi) => {
+              let cls = 'quiz-option-btn';
+              if (done) cls += oi === q.correctIndex ? ' is-correct' : oi === picked ? ' is-wrong' : '';
+              else if (picked === oi) cls += ' is-selected';
+              return `<button type="button" class="${cls}" ${done ? 'disabled' : `data-quiz-q="${qi}" data-quiz-o="${oi}"`}><span class="mono-index">${String.fromCharCode(65 + oi)}.</span><span>${esc(opt)}</span></button>`;
+            }).join('')}
+            ${done ? `<div class="explanation-box">${esc(q.explanation)}</div>` : ''}
+          </div>`;
+        }).join('')}
       </div>
-
-      ${
-        state.flashcardMode === 'due' && dueCards.length === 0
-          ? `<div class="status-banner">All due cards reviewed! Showing full deck for extra practice.</div>`
-          : ''
-      }
-
-      <div class="flashcard-stage-wrap">
-        <div class="flashcard-scene" id="flashcard-flip-stage" tabindex="0" role="button" aria-label="Flip flashcard">
-          <div class="flashcard-card ${state.flashcardFlipped ? 'is-flipped' : ''}">
-            <div class="flashcard-face">
-              <div class="card-header">
-                <span class="meta-text">${escapeHtml(card.topicTitle)}</span>
-                <span class="mono-index">Prompt · Box ${card.boxLevel}</span>
-              </div>
-              <p class="flashcard-prompt">${escapeHtml(card.front)}</p>
-              <div class="card-header">
-                ${
-                  card.hint
-                    ? `<button type="button" id="toggle-hint-btn" class="link-btn">${
-                        state.flashcardShowHint ? escapeHtml(card.hint) : 'Show Hint'
-                      }</button>`
-                    : '<span></span>'
-                }
-                <span class="meta-text">Click or Space to flip</span>
-              </div>
-            </div>
-
-            <div class="flashcard-face flashcard-face-back">
-              <div class="card-header">
-                <span class="meta-text">${escapeHtml(card.topicTitle)}</span>
-                <span class="small-strong" style="color: var(--accent);">Answer</span>
-              </div>
-              <p class="flashcard-answer">${escapeHtml(card.back)}</p>
-              <span class="meta-text" style="text-align: center;">Rate recall below to schedule next review</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="rating-grid">
-          <button type="button" class="rating-btn is-again" data-rate="again"><strong>Again</strong><span>5 min</span></button>
-          <button type="button" class="rating-btn" data-rate="hard"><strong>Hard</strong><span>8 hrs</span></button>
-          <button type="button" class="rating-btn is-good" data-rate="good"><strong>Good</strong><span>1–2 days</span></button>
-          <button type="button" class="rating-btn is-easy" data-rate="easy"><strong>Easy</strong><span>4+ days</span></button>
-        </div>
-      </div>
-
-      <div class="history-list">
-        <div class="history-header">Deck Index (${state.flashcards.length} cards)</div>
-        <div style="max-height: 280px; overflow-y: auto;">
-          ${state.flashcards
-            .map(
-              (c, idx) => `
-            <button type="button" class="history-item flashcard-jump-btn" data-card-index="${idx}">
-              <div class="history-item-top">
-                <span class="small-strong truncate">${escapeHtml(c.front)}</span>
-                <span class="meta-text tabular-nums" style="font-family: var(--font-mono);">Box ${c.boxLevel} · ${escapeHtml(c.masteryState)}</span>
-              </div>
-              <span class="meta-text">${escapeHtml(c.topicTitle)}</span>
-            </button>
-          `,
-            )
-            .join('')}
-        </div>
-      </div>
+      ${done ? '' : `<div class="form-actions"><button type="button" id="submit-quiz-btn" class="btn-primary" ${allPicked ? '' : 'disabled'}>Grade Quiz</button></div>`}
     </div>
-  `;
+  </div>`;
 }
 
-// Modal Controls
-function openAddSubjectModal() {
-  document.getElementById('new-subject-date').value = getDefaultExamDate();
-  showBanner('modal-error', null);
-  showBanner('modal-status', null);
-  document.getElementById('add-subject-modal').hidden = false;
+// ── 7. Actions & Event Handlers ─────────────────────────────────────────────
+async function handleSignIn() {
+  setBanner('auth-error-msg', '');
+  try { await signInWithPopup(auth, googleProvider); }
+  catch (err) { setBanner('auth-error-msg', err.message || 'Sign in failed.'); }
 }
 
-function closeAddSubjectModal() {
-  document.getElementById('add-subject-modal').hidden = true;
+function openModal(show) {
+  $('add-subject-modal').hidden = !show;
+  if (show) {
+    $('new-subject-date').value = defaultExamDate();
+    $('new-subject-title').focus();
+    setBanner('modal-error', ''); setBanner('modal-status', '');
+  } else {
+    $('add-subject-form').reset();
+    state.uploadedFile = null;
+    $('uploaded-file-name').textContent = 'No file attached (up to 10 MB)';
+    $('clear-file-btn').hidden = true;
+  }
 }
 
-// Event Listeners Setup
-function bindEvents() {
-  // Image fallbacks
-  const heroImg = document.getElementById('hero-desk-img');
-  if (heroImg) {
-    heroImg.addEventListener('error', () => {
-      heroImg.hidden = true;
-      document.getElementById('hero-desk-fallback').hidden = false;
+async function generateSummaryFor(topic) {
+  const sub = activeSubject();
+  if (!sub || !topic) return;
+  const btn = $('generate-summary-btn');
+  btn.disabled = true; btn.textContent = 'Generating...'; setBanner('summary-error', '');
+  try {
+    const res = await postJson('/api/ai/generate-summary', { subjectTitle: sub.title, topicTitle: topic, syllabusContext: sub.syllabusOverview });
+    state.activeSummaryId = await saveSummary(state.user.uid, sub.id, topic, res);
+  } catch (err) { setBanner('summary-error', err.message); }
+  finally { btn.disabled = false; btn.textContent = 'Make Study Sheet'; }
+}
+
+async function startQuizFor(topic, weaknesses = []) {
+  const sub = activeSubject();
+  if (!sub || !topic) return;
+  const btn = $('start-quiz-btn');
+  btn.disabled = true; btn.textContent = 'Building...'; setBanner('quiz-error', '');
+  try {
+    const difficulty = $('quiz-difficulty-select').value;
+    const res = await postJson('/api/ai/generate-quiz', {
+      subjectTitle: sub.title, topicTitle: topic, difficulty,
+      questionCount: Number($('quiz-count-select').value),
+      syllabusContext: sub.syllabusOverview, focusWeaknesses: weaknesses,
     });
+    const questions = res.questions || [];
+    if (!questions.length) throw new Error('No questions returned. Try again.');
+    const id = await saveQuiz(state.user.uid, sub.id, topic, difficulty, questions);
+    state.activeQuizId = id;
+    state.draftAnswers = questions.map(() => -1);
+  } catch (err) { setBanner('quiz-error', err.message); }
+  finally { btn.disabled = false; btn.textContent = 'Start Quiz'; }
+}
+
+// Single delegated click listener keeps DOM wiring concise
+document.addEventListener('click', async (e) => {
+  const target = e.target.closest('button, [data-wt-course], [data-wt-step]');
+  if (!target) return;
+
+  if (target.id === 'landing-signin-btn') return handleSignIn();
+  if (target.id === 'primary-action-btn') return state.user ? openModal(true) : handleSignIn();
+  if (target.id === 'signout-btn' || target.id === 'mobile-signout-btn') return signOut(auth);
+  if (target.id === 'sidebar-add-btn' || target.id === 'empty-add-subject-btn' || target.id === 'wt-start-btn') {
+    return state.user ? openModal(true) : handleSignIn();
   }
-  const flatImg = document.getElementById('flatlay-img');
-  if (flatImg) {
-    flatImg.addEventListener('error', () => {
-      flatImg.hidden = true;
-      document.getElementById('flatlay-fallback').hidden = false;
-    });
+  if (target.id === 'close-modal-btn' || target.id === 'cancel-modal-btn') return openModal(false);
+
+  // Walkthrough controls
+  if (target.dataset.wtCourse) { state.wtCourse = target.dataset.wtCourse; state.wtPicked = null; return renderWalkthrough(); }
+  if (target.dataset.wtStep !== undefined) { state.wtStep = Number(target.dataset.wtStep); state.wtPicked = null; return renderWalkthrough(); }
+  if (target.hasAttribute('data-wt-next')) { state.wtStep = Math.min(3, state.wtStep + 1); state.wtPicked = null; return renderWalkthrough(); }
+  if (target.dataset.wtOpt !== undefined) { state.wtPicked = Number(target.dataset.wtOpt); return renderWalkthrough(); }
+
+  // Workspace navigation & subjects
+  if (target.dataset.tab && activeSubject()) { state.activeTab = target.dataset.tab; return renderWorkspace(); }
+  if (target.dataset.selectSubject) {
+    state.activeSubjectId = target.dataset.selectSubject;
+    state.activeSummaryId = null; state.activeQuizId = null;
+    return subscribeSubjectData(state.activeSubjectId);
   }
-
-  // Sign in & primary header action
-  async function triggerSignIn() {
-    showBanner('auth-error-msg', null);
-    try {
-      await signInWithGoogle();
-    } catch (err) {
-      showBanner('auth-error-msg', err instanceof Error ? err.message : 'Sign-in cancelled.');
-    }
+  if (target.id === 'jump-full-schedule-btn') { state.activeTab = 'plan'; return renderWorkspace(); }
+  if (target.dataset.jumpSummary) {
+    state.activeTab = 'summaries'; renderWorkspace();
+    $('summary-topic-select').value = target.dataset.jumpSummary;
+    return generateSummaryFor(target.dataset.jumpSummary);
   }
-
-  document.getElementById('landing-signin-btn').addEventListener('click', triggerSignIn);
-  document.getElementById('primary-action-btn').addEventListener('click', () => {
-    if (state.user) openAddSubjectModal();
-    else void triggerSignIn();
-  });
-  document.getElementById('sidebar-add-btn').addEventListener('click', openAddSubjectModal);
-  document.getElementById('empty-add-subject-btn').addEventListener('click', openAddSubjectModal);
-
-  document.getElementById('brand-link').addEventListener('click', (e) => {
-    e.preventDefault();
-    if (state.user) setActiveTab('overview');
-  });
-
-  // Sign out
-  document.getElementById('signout-btn').addEventListener('click', () => void signOutUser());
-  document.getElementById('mobile-signout-btn').addEventListener('click', () => void signOutUser());
-
-  // Tab navigation
-  document.querySelectorAll('.nav-tab, .mobile-tab').forEach((btn) => {
-    btn.addEventListener('click', () => setActiveTab(btn.dataset.tab));
-  });
-
-  document.getElementById('jump-full-schedule-btn').addEventListener('click', () => {
-    setActiveTab('plan');
-  });
-
-  // Sidebar subject selection (event delegation)
-  document.getElementById('subject-list').addEventListener('click', (e) => {
-    const btn = e.target.closest('.subject-item');
-    if (!btn) return;
-    const id = btn.dataset.subjectId;
-    if (id && id !== state.activeSubjectId) {
-      state.activeSubjectId = id;
-      state.activeSummaryId = null;
-      state.activeQuizId = null;
-      state.flashcardIndex = 0;
-      subscribeToActiveSubject(id);
-      renderWorkspace();
-    }
-  });
-
-  // Workspace delegated clicks (task toggle, jump-to-tool, summaries, quizzes, flashcards)
-  document.getElementById('subject-workspace').addEventListener('click', async (e) => {
-    const jumpBtn = e.target.closest('.jump-tool-btn');
-    if (jumpBtn) {
-      setActiveTab(jumpBtn.dataset.tab, jumpBtn.dataset.topic);
-      return;
-    }
-
-    const checkBtn = e.target.closest('.task-check-btn');
-    if (checkBtn) {
-      const task = state.tasks.find((t) => t.id === checkBtn.dataset.taskId);
-      const subj = getActiveSubject();
-      if (task && subj) {
-        try {
-          await toggleStudyTask(task, state.tasks, subj.id);
-        } catch (err) {
-          showBanner('sync-error-banner', err.message);
-        }
-      }
-      return;
-    }
-
-    const sumItem = e.target.closest('[data-summary-id]');
-    if (sumItem) {
-      state.activeSummaryId = sumItem.dataset.summaryId;
-      renderSummariesTab();
-      return;
-    }
-
-    const quizItem = e.target.closest('[data-quiz-id]');
-    if (quizItem) {
-      state.activeQuizId = quizItem.dataset.quizId;
-      const q = state.quizzes.find((item) => item.id === state.activeQuizId);
-      state.draftQuizAnswers = q ? q.questions.map(() => -1) : [];
-      renderQuizzesTab();
-      return;
-    }
-
-    const optBtn = e.target.closest('.quiz-option-btn');
-    if (optBtn && !optBtn.disabled) {
-      const qIdx = Number(optBtn.dataset.qIdx);
-      const optIdx = Number(optBtn.dataset.optIdx);
-      state.draftQuizAnswers[qIdx] = optIdx;
-      renderQuizzesTab();
-      return;
-    }
-
-    if (e.target.closest('#submit-quiz-btn')) {
-      const activeQuiz = state.quizzes.find((q) => q.id === state.activeQuizId) || state.quizzes[0];
-      if (!activeQuiz) return;
-      if (state.draftQuizAnswers.some((a) => a < 0)) {
-        showBanner('quiz-error', 'Please answer every question before submitting.');
-        return;
-      }
-      showBanner('quiz-error', null);
-      const btn = document.getElementById('submit-quiz-btn');
-      btn.disabled = true;
-      btn.textContent = 'Grading...';
-      try {
-        await submitQuizCompletion(activeQuiz, state.draftQuizAnswers, state.quizzes);
-      } catch (err) {
-        showBanner('quiz-error', err.message);
-      }
-      return;
-    }
-
-    if (e.target.closest('#toggle-hint-btn')) {
-      e.stopPropagation();
-      state.flashcardShowHint = !state.flashcardShowHint;
-      renderFlashcardsTab();
-      return;
-    }
-
-    if (e.target.closest('#flashcard-flip-stage')) {
-      state.flashcardFlipped = !state.flashcardFlipped;
-      renderFlashcardsTab();
-      return;
-    }
-
-    const modeBtn = e.target.closest('.flashcard-mode-btn');
-    if (modeBtn) {
-      state.flashcardMode = modeBtn.dataset.mode;
-      state.flashcardIndex = 0;
-      state.flashcardFlipped = false;
-      state.flashcardShowHint = false;
-      renderFlashcardsTab();
-      return;
-    }
-
-    const rateBtn = e.target.closest('.rating-btn');
-    if (rateBtn) {
-      const now = Date.now();
-      const due = state.flashcards.filter((c) => c.nextReviewAt <= now);
-      const deck = state.flashcardMode === 'due' && due.length > 0 ? due : state.flashcards;
-      const card = deck[state.flashcardIndex];
-      if (!card) return;
-      try {
-        await reviewFlashcardSpacedRepetition(card, rateBtn.dataset.rate);
-        state.flashcardFlipped = false;
-        state.flashcardShowHint = false;
-        state.flashcardIndex = state.flashcardIndex + 1 < deck.length ? state.flashcardIndex + 1 : 0;
-        renderFlashcardsTab();
-      } catch (err) {
-        showBanner('flashcards-error', err.message);
-      }
-      return;
-    }
-
-    const jumpCard = e.target.closest('.flashcard-jump-btn');
-    if (jumpCard) {
-      state.flashcardMode = 'all';
-      state.flashcardIndex = Number(jumpCard.dataset.cardIndex) || 0;
-      state.flashcardFlipped = false;
-      state.flashcardShowHint = false;
-      renderFlashcardsTab();
-    }
-  });
-
-  // Delete subject inline confirmation
-  document.getElementById('ask-delete-subject-btn').addEventListener('click', () => {
-    document.getElementById('delete-prompt-default').hidden = true;
-    document.getElementById('delete-prompt-confirm').hidden = false;
-  });
-  document.getElementById('cancel-delete-subject-btn').addEventListener('click', () => {
-    document.getElementById('delete-prompt-confirm').hidden = true;
-    document.getElementById('delete-prompt-default').hidden = false;
-  });
-  document.getElementById('confirm-delete-subject-btn').addEventListener('click', async () => {
-    const subj = getActiveSubject();
-    if (!subj) return;
-    const btn = document.getElementById('confirm-delete-subject-btn');
-    btn.disabled = true;
-    btn.textContent = 'Deleting...';
-    try {
-      await deleteSubjectAndChildren(
-        subj.id,
-        state.tasks,
-        state.summaries,
-        state.quizzes,
-        state.flashcards,
-      );
-      document.getElementById('delete-prompt-confirm').hidden = true;
-      document.getElementById('delete-prompt-default').hidden = false;
-      setActiveTab('overview');
-    } catch (err) {
-      showBanner('sync-error-banner', err.message);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Confirm Delete';
-    }
-  });
-
-  // Study Plan filters & add milestone form
-  document.getElementById('plan-filter-group').addEventListener('click', (e) => {
-    const btn = e.target.closest('.seg-btn');
-    if (!btn) return;
-    state.planFilter = btn.dataset.filter;
-    document.querySelectorAll('#plan-filter-group .seg-btn').forEach((b) => {
-      b.classList.toggle('is-active', b === btn);
-    });
-    renderPlanTab();
-  });
-
-  document.getElementById('toggle-add-task-btn').addEventListener('click', () => {
-    const form = document.getElementById('add-milestone-form');
-    form.hidden = !form.hidden;
-    if (!form.hidden) {
-      document.getElementById('milestone-date').value = new Date().toISOString().slice(0, 10);
-    }
-  });
-  document.getElementById('cancel-add-task-btn').addEventListener('click', () => {
-    document.getElementById('add-milestone-form').hidden = true;
-  });
-
-  document.getElementById('add-milestone-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const subj = getActiveSubject();
-    if (!subj || !state.user) return;
-    const btn = document.getElementById('save-task-btn');
-    btn.disabled = true;
-    try {
-      await addCustomStudyTask(
-        state.user.uid,
-        subj.id,
-        {
-          topicTitle: document.getElementById('milestone-topic').value,
-          description: document.getElementById('milestone-desc').value,
-          scheduledDate: document.getElementById('milestone-date').value,
-          durationMinutes: Number(document.getElementById('milestone-duration').value) || 30,
-          priority: document.getElementById('milestone-priority').value,
-        },
-        state.tasks.length,
-      );
-      document.getElementById('milestone-desc').value = '';
-      document.getElementById('add-milestone-form').hidden = true;
-    } catch (err) {
-      showBanner('sync-error-banner', err.message);
-    } finally {
-      btn.disabled = false;
-    }
-  });
-
-  // Summary generator
-  document.getElementById('summary-topic-select').addEventListener('change', (e) => {
-    document.getElementById('summary-custom-topic').hidden = e.target.value !== '__custom__';
-  });
-
-  document.getElementById('generate-summary-btn').addEventListener('click', async () => {
-    const subj = getActiveSubject();
-    if (!subj || !state.user) return;
-    const sel = document.getElementById('summary-topic-select').value;
-    const topicTitle =
-      sel === '__custom__' ? document.getElementById('summary-custom-topic').value.trim() : sel;
-    if (!topicTitle) {
-      showBanner('summary-error', 'Please enter a topic name.');
-      return;
-    }
-    showBanner('summary-error', null);
-    const btn = document.getElementById('generate-summary-btn');
-    btn.disabled = true;
-    btn.textContent = 'Synthesizing...';
-    try {
-      const generated = await postJson('/api/ai/generate-summary', {
-        subjectTitle: subj.title,
-        topicTitle,
-        syllabusContext: subj.syllabusOverview,
-      });
-      const id = await saveStudySummary(state.user.uid, subj.id, topicTitle, generated);
-      state.activeSummaryId = id;
-    } catch (err) {
-      showBanner('summary-error', err.message);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Generate Study Sheet';
-    }
-  });
-
-  // Quiz generator
-  async function startQuizFlow(focusWeak) {
-    const subj = getActiveSubject();
-    if (!subj || !state.user) return;
-    showBanner('quiz-error', null);
-    const btn = document.getElementById('start-quiz-btn');
-    btn.disabled = true;
-    btn.textContent = 'Drafting Quiz...';
-
-    const topicLabel = focusWeak
-      ? 'Weak Topics Drill'
-      : document.getElementById('quiz-topic-select').value;
-    const difficulty = document.getElementById('quiz-difficulty-select').value;
-    const questionCount = Number(document.getElementById('quiz-count-select').value) || 5;
-
-    const missed = [];
-    if (focusWeak) {
-      state.quizzes.forEach((q) => {
-        if (q.status === 'completed') {
-          q.questions.forEach((qq, idx) => {
-            if (q.userAnswers[idx] !== qq.correctIndex) missed.push(qq.prompt);
-          });
-        }
-      });
-    }
-
-    try {
-      const generated = await postJson('/api/ai/generate-quiz', {
-        subjectTitle: subj.title,
-        topicTitle: topicLabel,
-        difficulty,
-        questionCount,
-        syllabusContext: subj.syllabusOverview,
-        focusWeaknesses: focusWeak ? missed.slice(0, 5) : undefined,
-      });
-      const id = await createQuiz(
-        state.user.uid,
-        subj.id,
-        topicLabel,
-        difficulty,
-        generated.questions,
-      );
-      state.activeQuizId = id;
-      state.draftQuizAnswers = generated.questions.map(() => -1);
-    } catch (err) {
-      showBanner('quiz-error', err.message);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Start Quiz';
-    }
+  if (target.dataset.jumpQuiz) {
+    state.activeTab = 'quizzes'; renderWorkspace();
+    $('quiz-topic-select').value = target.dataset.jumpQuiz;
+    return startQuizFor(target.dataset.jumpQuiz);
   }
 
-  document.getElementById('start-quiz-btn').addEventListener('click', () => void startQuizFlow(false));
-  document.getElementById('drill-weak-btn').addEventListener('click', () => void startQuizFlow(true));
+  // Delete subject confirmation
+  if (target.id === 'ask-delete-subject-btn') { $('delete-prompt-default').hidden = true; $('delete-prompt-confirm').hidden = false; }
+  if (target.id === 'cancel-delete-subject-btn') { $('delete-prompt-default').hidden = false; $('delete-prompt-confirm').hidden = true; }
+  if (target.id === 'confirm-delete-subject-btn' && activeSubject()) {
+    await removeSubject(activeSubject().id);
+    $('delete-prompt-default').hidden = false; $('delete-prompt-confirm').hidden = true;
+  }
 
-  // Flashcards generator & Spacebar flip
-  document.getElementById('generate-cards-btn').addEventListener('click', async () => {
-    const subj = getActiveSubject();
-    if (!subj || !state.user) return;
-    showBanner('flashcards-error', null);
-    const btn = document.getElementById('generate-cards-btn');
-    btn.disabled = true;
-    btn.textContent = 'Creating Deck...';
-    const topicTitle = document.getElementById('flashcard-topic-select').value;
+  // Study plan controls
+  if (target.dataset.filter) { state.planFilter = target.dataset.filter; return renderPlan(); }
+  if (target.id === 'toggle-add-task-btn' || target.id === 'cancel-add-task-btn') {
+    const f = $('add-milestone-form');
+    f.hidden = !f.hidden;
+    if (!f.hidden) $('milestone-date').value = defaultExamDate();
+  }
+  if (target.dataset.toggleTask) {
+    const task = state.tasks.find((t) => t.id === target.dataset.toggleTask);
+    if (task) return toggleTask(task);
+  }
 
-    try {
-      const generated = await postJson('/api/ai/generate-flashcards', {
-        subjectTitle: subj.title,
-        topicTitle,
-        syllabusContext: subj.syllabusOverview,
-        cardCount: 8,
-      });
-      await createFlashcardsBatch(state.user.uid, subj.id, topicTitle, generated.cards);
-      state.flashcardIndex = 0;
-      state.flashcardFlipped = false;
-      state.flashcardShowHint = false;
-    } catch (err) {
-      showBanner('flashcards-error', err.message);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Generate 8 Cards';
-    }
+  // Summaries & Quizzes controls
+  if (target.id === 'generate-summary-btn') {
+    const sel = $('summary-topic-select').value;
+    return generateSummaryFor(sel === '__custom__' ? $('summary-custom-topic').value.trim() : sel);
+  }
+  if (target.dataset.selectSummary) { state.activeSummaryId = target.dataset.selectSummary; return renderWorkspace(); }
+  if (target.id === 'start-quiz-btn') return startQuizFor($('quiz-topic-select').value);
+  if (target.id === 'drill-weak-btn') {
+    const missed = [...new Set(state.quizzes.filter((q) => q.status === 'completed').flatMap((q) =>
+      q.questions.some((qs, i) => q.userAnswers[i] !== qs.correctIndex) ? [q.topicTitle] : []
+    ))];
+    if (missed.length) return startQuizFor(`Weak Area Drill: ${missed[0]}`, missed);
+  }
+  if (target.dataset.selectQuiz) {
+    const q = state.quizzes.find((x) => x.id === target.dataset.selectQuiz);
+    if (q) { state.activeQuizId = q.id; state.draftAnswers = q.userAnswers.slice(); return renderWorkspace(); }
+  }
+  if (target.dataset.quizQ !== undefined) {
+    state.draftAnswers[Number(target.dataset.quizQ)] = Number(target.dataset.quizO);
+    return renderWorkspace();
+  }
+  if (target.id === 'submit-quiz-btn') {
+    const q = state.quizzes.find((x) => x.id === state.activeQuizId);
+    if (q) return gradeQuiz(q, state.draftAnswers);
+  }
+
+  // Sample syllabus fill & file clear
+  if (target.dataset.sample !== undefined) {
+    const s = SAMPLE_SYLLABI[Number(target.dataset.sample)];
+    if (s) { $('new-subject-title').value = s.title; $('new-subject-syllabus').value = s.syllabus; }
+  }
+  if (target.id === 'clear-file-btn') {
+    state.uploadedFile = null; $('syllabus-file-input').value = '';
+    $('uploaded-file-name').textContent = 'No file attached (up to 10 MB)'; $('clear-file-btn').hidden = true;
+  }
+});
+
+// Form submissions & file input
+$('summary-topic-select').addEventListener('change', (e) => {
+  $('summary-custom-topic').hidden = e.target.value !== '__custom__';
+});
+
+$('add-milestone-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const sub = activeSubject();
+  if (!sub || !state.user) return;
+  await addTask(state.user.uid, sub.id, {
+    topicTitle: $('milestone-topic').value,
+    scheduledDate: $('milestone-date').value,
+    durationMinutes: $('milestone-duration').value,
+    priority: $('milestone-priority').value,
+    description: $('milestone-desc').value,
   });
+  e.target.reset();
+  e.target.hidden = true;
+});
 
-  window.addEventListener('keydown', (e) => {
-    if (state.activeTab !== 'flashcards' || state.flashcards.length === 0) return;
-    const tag = e.target?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-    if (e.code === 'Space') {
-      e.preventDefault();
-      state.flashcardFlipped = !state.flashcardFlipped;
-      renderFlashcardsTab();
-    }
-  });
+$('syllabus-file-input').addEventListener('change', async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  setBanner('modal-error', '');
+  if (file.size > 10 * 1024 * 1024) return setBanner('modal-error', 'File exceeds the 10 MB limit.');
 
-  // Add Subject Modal Events
-  document.getElementById('close-modal-btn').addEventListener('click', closeAddSubjectModal);
-  document.getElementById('cancel-modal-btn').addEventListener('click', closeAddSubjectModal);
-
-  document.querySelectorAll('.sample-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const sample = SAMPLE_SYLLABI[Number(btn.dataset.sample)];
-      if (!sample) return;
-      document.getElementById('new-subject-title').value = sample.title;
-      document.getElementById('new-subject-syllabus').value = sample.syllabus;
-      state.uploadedFileData = null;
-      document.getElementById('uploaded-file-name').textContent =
-        'Upload a syllabus PDF or photo (up to 10 MB)';
-      document.getElementById('clear-file-btn').hidden = true;
-      showBanner('modal-error', null);
+  if (file.type.startsWith('text/') || /\.(txt|md)$/i.test(file.name)) {
+    $('new-subject-syllabus').value = (await file.text()).slice(0, 20000);
+    state.uploadedFile = null;
+  } else {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('Failed to read file.'));
+      reader.readAsDataURL(file);
     });
-  });
+    state.uploadedFile = { mimeType: file.type || 'application/pdf', base64: dataUrl.split(',')[1] || '' };
+  }
+  $('uploaded-file-name').textContent = file.name;
+  $('clear-file-btn').hidden = false;
+});
 
-  document.getElementById('clear-file-btn').addEventListener('click', () => {
-    state.uploadedFileData = null;
-    document.getElementById('syllabus-file-input').value = '';
-    document.getElementById('uploaded-file-name').textContent =
-      'Upload a syllabus PDF or photo (up to 10 MB)';
-    document.getElementById('clear-file-btn').hidden = true;
-  });
+$('add-subject-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!state.user) return;
+  const btn = $('submit-subject-btn');
+  btn.disabled = true; btn.textContent = 'Generating...';
+  setBanner('modal-error', ''); setBanner('modal-status', 'Reading syllabus and building milestones...');
 
-  document.getElementById('syllabus-file-input').addEventListener('change', async (e) => {
-    showBanner('modal-error', null);
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      showBanner('modal-error', 'Please choose a syllabus file smaller than 10 MB.');
-      return;
-    }
+  try {
+    const title = $('new-subject-title').value.trim();
+    const examDate = $('new-subject-date').value;
+    const hours = Number($('new-subject-hours').value) || 3;
+    const parsed = await postJson('/api/ai/parse-syllabus', {
+      subjectTitle: title, examDate, dailyHours: hours,
+      currentDate: new Date().toISOString().slice(0, 10),
+      syllabusText: $('new-subject-syllabus').value,
+      fileData: state.uploadedFile,
+    });
+    const newId = await createSubject(state.user.uid, title, examDate, hours, parsed);
+    state.activeSubjectId = newId; state.activeTab = 'overview';
+    openModal(false);
+    subscribeSubjectData(newId);
+  } catch (err) {
+    setBanner('modal-status', ''); setBanner('modal-error', err.message);
+  } finally { btn.disabled = false; btn.textContent = 'Build Study Plan'; }
+});
 
-    if (file.type === 'text/plain' || file.name.endsWith('.md') || file.name.endsWith('.txt')) {
-      const text = await file.text();
-      const ta = document.getElementById('new-subject-syllabus');
-      ta.value = ta.value ? `${ta.value}\n\n${text}` : text;
-      state.uploadedFileData = null;
-      return;
-    }
+// ── 8. Boot Auth Listener ───────────────────────────────────────────────────
+onAuthStateChanged(auth, async (user) => {
+  state.unsubSubjects?.(); state.unsubSubjects = null; clearChildListeners();
+  state.user = user; state.authReady = true;
+  state.subjects = []; state.subjectsLoaded = false; state.activeSubjectId = null;
 
-    const supported = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
-    if (!supported.includes(file.type)) {
-      showBanner('modal-error', 'Supported files: PDF, PNG, JPG, TXT, or Markdown (.md).');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const raw = typeof reader.result === 'string' ? reader.result : '';
-      const base64 = raw.includes(',') ? raw.split(',')[1] : raw;
-      state.uploadedFileData = { mimeType: file.type, base64, fileName: file.name };
-      document.getElementById('uploaded-file-name').textContent = `Attached: ${file.name}`;
-      document.getElementById('clear-file-btn').hidden = false;
-    };
-    reader.readAsDataURL(file);
-  });
-
-  document.getElementById('add-subject-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (!state.user) return;
-    showBanner('modal-error', null);
-
-    const title = document.getElementById('new-subject-title').value.trim();
-    const examDate = document.getElementById('new-subject-date').value;
-    const dailyHours = Number(document.getElementById('new-subject-hours').value) || 3;
-    const syllabusText = document.getElementById('new-subject-syllabus').value.trim();
-
-    if (!title || !examDate) {
-      showBanner('modal-error', 'Subject name and exam date are required.');
-      return;
-    }
-    if (!syllabusText && !state.uploadedFileData) {
-      showBanner('modal-error', 'Please paste your syllabus or upload a PDF/image.');
-      return;
-    }
-
-    const submitBtn = document.getElementById('submit-subject-btn');
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Building Plan...';
-    showBanner('modal-status', 'Analyzing syllabus topics and scheduling revision milestones...');
-
-    try {
-      const parsed = await postJson('/api/ai/parse-syllabus', {
-        subjectTitle: title,
-        examDate,
-        currentDate: new Date().toISOString().slice(0, 10),
-        dailyHours,
-        syllabusText: syllabusText || undefined,
-        fileData: state.uploadedFileData || undefined,
-      });
-
-      showBanner('modal-status', 'Syncing personalized study plan to your cloud workspace...');
-      const newId = await createSubjectWithTasks(
-        state.user.uid,
-        title,
-        examDate,
-        dailyHours,
-        parsed,
-      );
-
-      document.getElementById('new-subject-title').value = '';
-      document.getElementById('new-subject-syllabus').value = '';
-      state.uploadedFileData = null;
-      document.getElementById('uploaded-file-name').textContent =
-        'Upload a syllabus PDF or photo (up to 10 MB)';
-      document.getElementById('clear-file-btn').hidden = true;
-
-      state.activeSubjectId = newId;
-      closeAddSubjectModal();
-      setActiveTab('overview');
-      subscribeToActiveSubject(newId);
-    } catch (err) {
-      showBanner('modal-error', err.message);
-    } finally {
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Generate Study Plan';
-      showBanner('modal-status', null);
-    }
-  });
-}
-
-// Initialize App
-function init() {
-  bindEvents();
-
-  watchAuth(async (nextUser) => {
-    state.user = nextUser;
-    state.authReady = true;
-
-    if (state.unsubSubjects) {
-      state.unsubSubjects();
-      state.unsubSubjects = null;
-    }
-    clearSubjectSubscriptions();
-
-    if (nextUser) {
-      try {
-        await ensureUserProfile(nextUser);
-      } catch (err) {
-        showBanner('sync-error-banner', err.message);
-      }
-
-      state.unsubSubjects = subscribeSubjects(
-        nextUser.uid,
-        (items) => {
-          state.subjects = items;
-          state.subjectsLoaded = true;
-          const prevId = state.activeSubjectId;
-          const nextId =
-            prevId && items.some((s) => s.id === prevId) ? prevId : items[0]?.id ?? null;
-          state.activeSubjectId = nextId;
-          if (nextId !== prevId || state.unsubChildren.length === 0) {
-            subscribeToActiveSubject(nextId);
-          }
-          renderApp();
-        },
-        (err) => {
-          showBanner('sync-error-banner', err.message);
-          state.subjectsLoaded = true;
-          renderApp();
-        },
-      );
-    } else {
-      state.subjects = [];
-      state.subjectsLoaded = false;
-      state.activeSubjectId = null;
-      state.tasks = [];
-      state.summaries = [];
-      state.quizzes = [];
-      state.flashcards = [];
-      renderApp();
-    }
-  });
-}
-
-init();
+  if (user) {
+    await ensureProfile(user).catch((err) => setBanner('sync-error-banner', err.message));
+    state.unsubSubjects = listenCollection('subjects', [['userId', user.uid]], (items) => {
+      state.subjects = items.sort((a, b) => a.examDate.localeCompare(b.examDate));
+      state.subjectsLoaded = true;
+      if (!state.subjects.some((s) => s.id === state.activeSubjectId)) {
+        state.activeSubjectId = state.subjects[0]?.id || null;
+        subscribeSubjectData(state.activeSubjectId);
+      } else renderWorkspace();
+    }, (err) => setBanner('sync-error-banner', err.message));
+  }
+  renderApp();
+});

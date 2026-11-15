@@ -1,419 +1,216 @@
-import express from 'express';
+import express, { type Response } from 'express';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
-import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
+import { GoogleGenAI, Type, ThinkingLevel, type ContentListUnion } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const PORT = Number(process.env.PORT || 3000);
-const MODEL_NAME = 'gemini-4-hydrogen';
+const MODEL = 'gemini-4-hydrogen';
 
-function getGenAIClient(): GoogleGenAI {
+// Create Gemini client using server-side secret key
+function getAI() {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY is not configured on the server.');
-  }
+  if (!apiKey) throw new Error('GEMINI_API_KEY is missing.');
   return new GoogleGenAI({
     apiKey,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      },
-    },
+    httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
   });
 }
 
-async function generateWithRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
-  let lastError: unknown;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+// Call Gemini with structured JSON output and simple backoff for 429/503 errors
+async function askGeminiJson(contents: ContentListUnion, schema: Record<string, unknown>) {
+  const ai = getAI();
+  for (let i = 0; i < 3; i++) {
     try {
-      return await fn();
-    } catch (error) {
-      lastError = error;
-      const msg = error instanceof Error ? error.message : String(error);
-      const isTransient = msg.includes('429') || msg.includes('503') || msg.includes('UNAVAILABLE');
-      if (!isTransient || attempt === maxRetries) {
-        throw error;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 750 * Math.pow(2, attempt)));
+      const res = await ai.models.generateContent({
+        model: MODEL,
+        contents,
+        config: {
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+          responseMimeType: 'application/json',
+          responseSchema: schema,
+        },
+      });
+      return JSON.parse((res.text ?? '{}').trim());
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const retryable = msg.includes('429') || msg.includes('503') || msg.includes('UNAVAILABLE');
+      if (!retryable || i === 2) throw err;
+      await new Promise((r) => setTimeout(r, 750 * 2 ** i));
     }
   }
-  throw lastError;
 }
 
-function formatApiError(error: unknown): { status: number; message: string } {
-  const raw = error instanceof Error ? error.message : String(error);
-  if (raw.includes('API_KEY_INVALID') || raw.includes('PERMISSION_DENIED') || raw.includes('403')) {
-    return {
-      status: 403,
-      message: 'Gemini API access denied. Please verify your API key in Settings > Secrets.',
-    };
+// Map server/Gemini errors into clear HTTP responses
+function sendError(res: Response, err: unknown) {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (msg.includes('API_KEY_INVALID') || msg.includes('403')) {
+    return res.status(403).json({ error: 'Gemini API access denied. Check GEMINI_API_KEY.' });
   }
-  if (raw.includes('RESOURCE_EXHAUSTED') || raw.includes('429')) {
-    return {
-      status: 429,
-      message: 'AI rate limit reached. Please wait a moment and try again.',
-    };
+  if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED')) {
+    return res.status(429).json({ error: 'AI rate limit reached. Try again shortly.' });
   }
-  if (raw.includes('GEMINI_API_KEY is not configured')) {
-    return {
-      status: 500,
-      message: 'Server AI key is not configured in Settings > Secrets.',
-    };
-  }
-  return {
-    status: 500,
-    message: raw || 'Failed to generate study content. Please try again.',
-  };
-}
-
-interface SyllabusFilePayload {
-  mimeType: string;
-  base64: string;
-  fileName?: string;
+  return res.status(500).json({ error: msg || 'Request failed.' });
 }
 
 async function startServer() {
   const app = express();
   app.use(express.json({ limit: '15mb' }));
 
-  app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok' });
-  });
+  app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
+  // 1. Parse syllabus text or uploaded PDF/image into topics and dated milestones
   app.post('/api/ai/parse-syllabus', async (req, res) => {
     try {
-      const {
-        subjectTitle,
-        examDate,
-        currentDate,
-        dailyHours,
-        syllabusText,
-        fileData,
-      } = req.body as {
-        subjectTitle: string;
-        examDate: string;
-        currentDate: string;
-        dailyHours: number;
-        syllabusText?: string;
-        fileData?: SyllabusFilePayload;
-      };
-
+      const { subjectTitle, examDate, currentDate, dailyHours, syllabusText, fileData } = req.body;
       if (!subjectTitle?.trim() || !examDate?.trim()) {
-        res.status(400).json({ error: 'Subject title and exam date are required.' });
-        return;
+        return res.status(400).json({ error: 'Subject name and exam date are required.' });
       }
       if (!syllabusText?.trim() && !fileData?.base64) {
-        res.status(400).json({ error: 'Please paste syllabus text or upload a syllabus file.' });
-        return;
+        return res.status(400).json({ error: 'Paste syllabus text or upload a file.' });
       }
 
-      const ai = getGenAIClient();
       const prompt = [
-        `You are Taau Ai, an expert academic exam-prep strategist.`,
-        `Analyze the provided syllabus for "${subjectTitle.trim()}".`,
-        `Today's date is ${currentDate}. The exam date is ${examDate}. The student can study ${dailyHours} hours per day.`,
-        `1. Write a concise syllabusOverview (max 1000 characters) summarizing the core exam scope and highest-leverage focus areas.`,
-        `2. Extract 5 to 14 concrete, distinct exam topics into "topics" (each concise, <= 120 characters).`,
-        `3. Build a prioritized, deadline-aware study plan of 8 to 16 actionable revision milestones in "tasks".`,
-        `   - Each task must have a scheduledDate (YYYY-MM-DD) between ${currentDate} and ${examDate} inclusive.`,
-        `   - Front-load foundational or high-weight topics earlier and place active recall / mock review closer to ${examDate}.`,
-        `   - durationMinutes should be between 20 and 120, aligned with ${dailyHours}h/day capacity.`,
-        `   - priority must be one of "high", "medium", or "normal".`,
-        `   - description must be a concrete revision action (max 280 chars).`,
-        syllabusText?.trim() ? `\nPasted Syllabus Content:\n${syllabusText.trim().slice(0, 24000)}` : '',
-      ]
-        .filter(Boolean)
-        .join('\n');
+        `Build an exam prep plan for "${subjectTitle.trim()}".`,
+        `Today: ${currentDate}. Exam: ${examDate}. Pace: ${dailyHours}h/day.`,
+        `Return: syllabusOverview (<=1000 chars), 5-14 distinct topics (<=120 chars each), and 8-16 tasks.`,
+        `Each task needs topicTitle, description (<=280 chars), scheduledDate (${currentDate}..${examDate}), durationMinutes (20-120), priority (high|medium|normal).`,
+        syllabusText?.trim() ? `\nSyllabus:\n${syllabusText.trim().slice(0, 24000)}` : '',
+      ].filter(Boolean).join('\n');
 
       const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
       if (fileData?.base64 && fileData?.mimeType) {
-        parts.push({
-          inlineData: {
-            mimeType: fileData.mimeType,
-            data: fileData.base64,
-          },
-        });
+        parts.push({ inlineData: { mimeType: fileData.mimeType, data: fileData.base64 } });
       }
       parts.push({ text: prompt });
 
-      const response = await generateWithRetry(() =>
-        ai.models.generateContent({
-          model: MODEL_NAME,
-          contents: { parts },
-          config: {
-            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-            responseMimeType: 'application/json',
-            responseSchema: {
+      const data = await askGeminiJson({ parts }, {
+        type: Type.OBJECT,
+        properties: {
+          syllabusOverview: { type: Type.STRING },
+          topics: { type: Type.ARRAY, items: { type: Type.STRING } },
+          tasks: {
+            type: Type.ARRAY,
+            items: {
               type: Type.OBJECT,
               properties: {
-                syllabusOverview: { type: Type.STRING },
-                topics: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                },
-                tasks: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      topicTitle: { type: Type.STRING },
-                      description: { type: Type.STRING },
-                      scheduledDate: { type: Type.STRING },
-                      durationMinutes: { type: Type.INTEGER },
-                      priority: { type: Type.STRING },
-                    },
-                    required: ['topicTitle', 'description', 'scheduledDate', 'durationMinutes', 'priority'],
-                  },
-                },
+                topicTitle: { type: Type.STRING },
+                description: { type: Type.STRING },
+                scheduledDate: { type: Type.STRING },
+                durationMinutes: { type: Type.INTEGER },
+                priority: { type: Type.STRING },
               },
-              required: ['syllabusOverview', 'topics', 'tasks'],
+              required: ['topicTitle', 'description', 'scheduledDate', 'durationMinutes', 'priority'],
             },
           },
-        }),
-      );
-
-      const parsed = JSON.parse((response.text ?? '{}').trim());
-      res.json(parsed);
-    } catch (error) {
-      const formatted = formatApiError(error);
-      res.status(formatted.status).json({ error: formatted.message });
+        },
+        required: ['syllabusOverview', 'topics', 'tasks'],
+      });
+      res.json(data);
+    } catch (err) {
+      sendError(res, err);
     }
   });
 
+  // 2. Generate topic revision summary, formula sheet, pitfalls, and memory anchor
   app.post('/api/ai/generate-summary', async (req, res) => {
     try {
-      const { subjectTitle, topicTitle, syllabusContext } = req.body as {
-        subjectTitle: string;
-        topicTitle: string;
-        syllabusContext?: string;
-      };
-
+      const { subjectTitle, topicTitle, syllabusContext } = req.body;
       if (!subjectTitle?.trim() || !topicTitle?.trim()) {
-        res.status(400).json({ error: 'Subject title and topic title are required.' });
-        return;
+        return res.status(400).json({ error: 'Subject and topic are required.' });
       }
 
-      const ai = getGenAIClient();
       const prompt = [
-        `Create a high-yield last-minute exam revision sheet for "${topicTitle.trim()}" in "${subjectTitle.trim()}".`,
-        syllabusContext ? `Subject context: ${syllabusContext.slice(0, 1500)}` : '',
-        `Return structured JSON with:`,
-        `- overview: crisp synthesis of the topic (max 1500 chars)`,
-        `- coreConcepts: 5 to 8 concise, exam-ready bullet explanations (each max 400 chars)`,
-        `- formulaSheet: 2 to 6 key formulas, equations, theorems, or structured decision rules with { label, expression, note }`,
-        `- examPitfalls: 3 to 5 common mistakes students lose marks on`,
-        `- memoryAnchor: 1 memorable mnemonic or mental shortcut (max 450 chars)`,
-      ]
-        .filter(Boolean)
-        .join('\n');
+        `Create a concise exam revision sheet for "${topicTitle.trim()}" in "${subjectTitle.trim()}".`,
+        syllabusContext ? `Context: ${syllabusContext.slice(0, 1500)}` : '',
+        `Include overview, 5-8 coreConcepts, 2-6 formulaSheet items ({label, expression, note}), 3-5 examPitfalls, and 1 memoryAnchor.`,
+      ].filter(Boolean).join('\n');
 
-      const response = await generateWithRetry(() =>
-        ai.models.generateContent({
-          model: MODEL_NAME,
-          contents: prompt,
-          config: {
-            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-            responseMimeType: 'application/json',
-            responseSchema: {
+      const data = await askGeminiJson(prompt, {
+        type: Type.OBJECT,
+        properties: {
+          overview: { type: Type.STRING },
+          coreConcepts: { type: Type.ARRAY, items: { type: Type.STRING } },
+          formulaSheet: {
+            type: Type.ARRAY,
+            items: {
               type: Type.OBJECT,
               properties: {
-                overview: { type: Type.STRING },
-                coreConcepts: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                },
-                formulaSheet: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      label: { type: Type.STRING },
-                      expression: { type: Type.STRING },
-                      note: { type: Type.STRING },
-                    },
-                    required: ['label', 'expression', 'note'],
-                  },
-                },
-                examPitfalls: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                },
-                memoryAnchor: { type: Type.STRING },
+                label: { type: Type.STRING },
+                expression: { type: Type.STRING },
+                note: { type: Type.STRING },
               },
-              required: ['overview', 'coreConcepts', 'formulaSheet', 'examPitfalls', 'memoryAnchor'],
+              required: ['label', 'expression', 'note'],
             },
           },
-        }),
-      );
-
-      const parsed = JSON.parse((response.text ?? '{}').trim());
-      res.json(parsed);
-    } catch (error) {
-      const formatted = formatApiError(error);
-      res.status(formatted.status).json({ error: formatted.message });
+          examPitfalls: { type: Type.ARRAY, items: { type: Type.STRING } },
+          memoryAnchor: { type: Type.STRING },
+        },
+        required: ['overview', 'coreConcepts', 'formulaSheet', 'examPitfalls', 'memoryAnchor'],
+      });
+      res.json(data);
+    } catch (err) {
+      sendError(res, err);
     }
   });
 
+  // 3. Generate adaptive 4-option multiple-choice practice quiz with explanations
   app.post('/api/ai/generate-quiz', async (req, res) => {
     try {
-      const { subjectTitle, topicTitle, difficulty, questionCount, syllabusContext, focusWeaknesses } = req.body as {
-        subjectTitle: string;
-        topicTitle: string;
-        difficulty: 'standard' | 'intensive';
-        questionCount: number;
-        syllabusContext?: string;
-        focusWeaknesses?: string[];
-      };
-
+      const { subjectTitle, topicTitle, difficulty, questionCount, syllabusContext, focusWeaknesses } = req.body;
       if (!subjectTitle?.trim() || !topicTitle?.trim()) {
-        res.status(400).json({ error: 'Subject and topic are required.' });
-        return;
+        return res.status(400).json({ error: 'Subject and topic are required.' });
       }
 
       const count = Math.min(Math.max(Number(questionCount) || 5, 3), 15);
-      const ai = getGenAIClient();
       const prompt = [
-        `Generate ${count} ${difficulty === 'intensive' ? 'challenging, application-heavy' : 'clear, exam-aligned'} multiple-choice practice questions for "${topicTitle.trim()}" in "${subjectTitle.trim()}".`,
-        syllabusContext ? `Subject context: ${syllabusContext.slice(0, 1500)}` : '',
-        focusWeaknesses?.length
-          ? `Prioritize concepts related to these recent missed areas: ${focusWeaknesses.join('; ').slice(0, 600)}`
-          : '',
-        `Each question must have exactly 4 distinct answer choices in "options", a 0-based integer "correctIndex" (0..3), and a clear step-by-step "explanation" explaining why the right answer works and why distractors are wrong.`,
-      ]
-        .filter(Boolean)
-        .join('\n');
+        `Generate ${count} ${difficulty === 'intensive' ? 'challenging' : 'exam-style'} 4-option MCQs for "${topicTitle.trim()}" in "${subjectTitle.trim()}".`,
+        syllabusContext ? `Context: ${syllabusContext.slice(0, 1500)}` : '',
+        focusWeaknesses?.length ? `Focus on missed areas: ${focusWeaknesses.join('; ').slice(0, 600)}` : '',
+        `Each question needs prompt, 4 options, 0-based correctIndex (0..3), and step-by-step explanation.`,
+      ].filter(Boolean).join('\n');
 
-      const response = await generateWithRetry(() =>
-        ai.models.generateContent({
-          model: MODEL_NAME,
-          contents: prompt,
-          config: {
-            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-            responseMimeType: 'application/json',
-            responseSchema: {
+      const data = await askGeminiJson(prompt, {
+        type: Type.OBJECT,
+        properties: {
+          questions: {
+            type: Type.ARRAY,
+            items: {
               type: Type.OBJECT,
               properties: {
-                questions: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      prompt: { type: Type.STRING },
-                      options: {
-                        type: Type.ARRAY,
-                        items: { type: Type.STRING },
-                      },
-                      correctIndex: { type: Type.INTEGER },
-                      explanation: { type: Type.STRING },
-                    },
-                    required: ['prompt', 'options', 'correctIndex', 'explanation'],
-                  },
-                },
+                prompt: { type: Type.STRING },
+                options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                correctIndex: { type: Type.INTEGER },
+                explanation: { type: Type.STRING },
               },
-              required: ['questions'],
+              required: ['prompt', 'options', 'correctIndex', 'explanation'],
             },
           },
-        }),
-      );
-
-      const parsed = JSON.parse((response.text ?? '{}').trim());
-      res.json(parsed);
-    } catch (error) {
-      const formatted = formatApiError(error);
-      res.status(formatted.status).json({ error: formatted.message });
+        },
+        required: ['questions'],
+      });
+      res.json(data);
+    } catch (err) {
+      sendError(res, err);
     }
   });
 
-  app.post('/api/ai/generate-flashcards', async (req, res) => {
-    try {
-      const { subjectTitle, topicTitle, syllabusContext, cardCount } = req.body as {
-        subjectTitle: string;
-        topicTitle: string;
-        syllabusContext?: string;
-        cardCount?: number;
-      };
-
-      if (!subjectTitle?.trim() || !topicTitle?.trim()) {
-        res.status(400).json({ error: 'Subject and topic are required.' });
-        return;
-      }
-
-      const count = Math.min(Math.max(Number(cardCount) || 8, 4), 12);
-      const ai = getGenAIClient();
-      const prompt = [
-        `Generate ${count} active-recall spaced-repetition flashcards for "${topicTitle.trim()}" in "${subjectTitle.trim()}".`,
-        syllabusContext ? `Subject context: ${syllabusContext.slice(0, 1500)}` : '',
-        `Each card needs:`,
-        `- front: focused question, term, or prompt (max 350 chars)`,
-        `- back: crisp, accurate answer or formula breakdown (max 800 chars)`,
-        `- hint: subtle recall cue without giving away the answer (max 200 chars)`,
-      ]
-        .filter(Boolean)
-        .join('\n');
-
-      const response = await generateWithRetry(() =>
-        ai.models.generateContent({
-          model: MODEL_NAME,
-          contents: prompt,
-          config: {
-            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                cards: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      front: { type: Type.STRING },
-                      back: { type: Type.STRING },
-                      hint: { type: Type.STRING },
-                    },
-                    required: ['front', 'back', 'hint'],
-                  },
-                },
-              },
-              required: ['cards'],
-            },
-          },
-        }),
-      );
-
-      const parsed = JSON.parse((response.text ?? '{}').trim());
-      res.json(parsed);
-    } catch (error) {
-      const formatted = formatApiError(error);
-      res.status(formatted.status).json({ error: formatted.message });
-    }
-  });
-
+  // Serve Vite in development, built dist/ in production
   if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
+    const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.resolve(__dirname, 'dist');
+    const distPath = path.resolve(import.meta.dirname, 'dist');
     app.use(express.static(distPath));
-    app.get('*', (_req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    app.get('*', (_req, res) => res.sendFile(path.join(distPath, 'index.html')));
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Taau Ai server running on http://localhost:${PORT}`);
-  });
+  app.listen(PORT, '0.0.0.0', () => console.log(`Taau Ai server running on http://localhost:${PORT}`));
 }
 
 startServer().catch((err) => {
-  console.error('Failed to start server:', err);
+  console.error('Server failed:', err);
   process.exit(1);
 });
