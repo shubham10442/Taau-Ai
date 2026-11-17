@@ -36,14 +36,44 @@ function listen(col, filters, onData, onErr) {
     (err) => { try { dbFail(err, 'list', col); } catch (w) { onErr(w); } });
 }
 
-// ── 2. Sample Syllabi & State ───────────────────────────────────────────────
+// ── 2. Static Demo & Sample Syllabi ─────────────────────────────────────────
 const SAMPLES = [
   { title: 'Data Structures & Algorithms', text: 'Unit 1: Big-O, Recurrence Relations, Master Theorem\nUnit 2: Stacks, Queues, Linked Lists\nUnit 3: BSTs, AVL Rotations, Heaps\nUnit 4: BFS, DFS, Dijkstra, Kruskal MST' },
   { title: 'Discrete Mathematics', text: 'Mod 1: Quantifiers & Proofs\nMod 2: Equivalence Relations\nMod 3: Strong Induction & Recurrences\nMod 4: Pigeonhole & Inclusion-Exclusion' },
 ];
 
+const DEMO = {
+  dsa: {
+    meta: '6 days left · 3h/day', rawTitle: 'CS101 · End-Sem Snippet',
+    raw: 'Unit 1: Recurrences, Big-O & Master Theorem\nUnit 2: Stacks, Queues & Circular Buffers\nUnit 3: BSTs, AVL Rotations & Heaps\nUnit 4: BFS/DFS, Dijkstra & Kruskal MST',
+    plan: [
+      ['Day 1', 'Master Theorem & Recurrences', '45m · High', 'amber'],
+      ['Day 2', 'AVL Rotations (LL, RR, LR, RL)', '60m · High', 'amber'],
+      ['Day 4', 'Dijkstra Edge Cases', '50m · Scheduled', ''],
+      ['Day 6', 'Past-Paper Timed Mock', '75m · Final', 'lime'],
+    ],
+    formulas: [['Master Theorem (Case 2)', 'T(n) = aT(n/b) + Θ(n^c log^k n) -> Θ(n^c log^(k+1) n)'], ['AVL Balance Factor', 'BF(node) = height(left) - height(right) in {-1, 0, +1}']],
+    pitfall: 'Dijkstra fails when any reachable edge has a negative weight.',
+    quiz: { q: 'Which recurrence gives T(n) = Θ(n log n)?', opts: ['T(n) = 2T(n/2) + n', 'T(n) = 4T(n/2) + n', 'T(n) = 2T(n/2) + n^2', 'T(n) = T(n-1) + n'], ans: 0, exp: 'a=2, b=2 -> log_2(2)=1, matching f(n)=n (Case 2).' },
+  },
+  discrete: {
+    meta: '4 days left · 2.5h/day', rawTitle: 'MA102 · Discrete Outline',
+    raw: 'Mod 1: Quantifiers & Contradiction\nMod 2: Equivalence Relations\nMod 3: Strong Induction & Recurrences\nMod 4: Pigeonhole & Inclusion-Exclusion',
+    plan: [
+      ['Day 1', 'Quantifier Negation & Proofs', '40m · High', 'amber'],
+      ['Day 2', 'Equivalence Classes & Hasse', '50m · Scheduled', ''],
+      ['Day 3', 'Pigeonhole & Inclusion-Exclusion', '55m · High', 'amber'],
+      ['Day 4', 'Mixed Proof Drill', '60m · Final', 'lime'],
+    ],
+    formulas: [['Pigeonhole Principle', 'At least ceil(N / k) objects share one of k boxes'], ['Inclusion-Exclusion (3 sets)', '|A U B U C| = Sum|A| - Sum|A n B| + |A n B n C|']],
+    pitfall: 'Check transitive pairs (a,b) and (b,c) even when a = c.',
+    quiz: { q: 'Min students needed to guarantee 3 share a birth month?', opts: ['24', '25', '26', '36'], ans: 1, exp: 'At most 2*12 = 24 avoid 3 per month; 25 guarantees a match.' },
+  },
+};
+
+// ── 3. State & Small DOM Helpers ────────────────────────────────────────────
 const state = {
-  user: null, ready: false, estDays: 6, estHours: 3,
+  user: null, ready: false, wtCourse: 'dsa', wtStep: 0, wtPick: null,
   subjects: [], loaded: false, subId: null, tab: 'overview', filter: 'all',
   tasks: [], summaries: [], sumId: null, quizzes: [], quizId: null, draft: [],
   fileData: null, unsubSubs: null, unsubChild: [],
@@ -178,22 +208,20 @@ function subscribeSubject(subId) {
   );
 }
 
-function renderEstimator() {
-  const total = state.estDays * state.estHours;
-  const earlyEnd = Math.max(1, Math.ceil(state.estDays * 0.5));
-  const midEnd = Math.max(earlyEnd + 1, state.estDays - 1);
-  $('est-total').textContent = `${total}h total`;
-  document.querySelectorAll('[data-est-days]').forEach((b) => b.classList.toggle('is-active', Number(b.dataset.estDays) === state.estDays));
-  document.querySelectorAll('[data-est-hours]').forEach((b) => b.classList.toggle('is-active', Number(b.dataset.estHours) === state.estHours));
+function renderWalkthrough() {
+  const c = DEMO[state.wtCourse];
+  $('wt-meta-tag').textContent = c.meta;
+  document.querySelectorAll('.wt-course').forEach((b) => b.classList.toggle('is-active', b.dataset.wtCourse === state.wtCourse));
+  document.querySelectorAll('.wt-step').forEach((b) => b.classList.toggle('is-active', Number(b.dataset.wtStep) === state.wtStep));
 
-  const phases = [
-    ['Core Concepts & Sheets', `Days 1-${earlyEnd} · Heavy units first`, `${(total * 0.5).toFixed(1).replace(/\.0$/, '')}h`, 'amber'],
-    ['Problem Sets & Tracing', `Days ${earlyEnd + 1}-${midEnd} · Past papers`, `${(total * 0.3).toFixed(1).replace(/\.0$/, '')}h`, ''],
-    ['Timed Quizzes & Weak Drills', `Last 48h · Fix missed topics`, `${(total * 0.2).toFixed(1).replace(/\.0$/, '')}h`, 'lime'],
+  const views = [
+    `<p class="small-strong">${esc(c.rawTitle)}</p><pre class="wt-raw">${esc(c.raw)}</pre><p class="meta">Gemini extracts topics and weights priority automatically.</p>`,
+    `<p class="small-strong">Generated Milestones</p><div class="stack-sm">${c.plan.map(([d, t, m, cls]) => `<div class="wt-plan-row"><span class="mono ${cls}">${d}</span><span class="small-strong">${t}</span><span class="meta mono">${m}</span></div>`).join('')}</div>`,
+    `<p class="small-strong">Key Formulas</p>${c.formulas.map(([l, e]) => `<div class="formula-card"><span class="small-strong">${l}</span><div class="formula-expr">${e}</div></div>`).join('')}<p class="meta amber">${c.pitfall}</p>`,
+    `<p class="small-strong">${c.quiz.q}</p><div class="stack-sm">${c.quiz.opts.map((o, i) => `<button type="button" class="quiz-opt ${state.wtPick !== null ? (i === c.quiz.ans ? 'is-correct' : i === state.wtPick ? 'is-wrong' : '') : ''}" data-wt-opt="${i}"><span class="mono">${String.fromCharCode(65 + i)}.</span><span>${o}</span></button>`).join('')}</div><p class="meta">${state.wtPick !== null ? c.quiz.exp : 'Pick an option to test instant grading.'}</p>`,
   ];
-  $('est-breakdown').innerHTML = phases.map(([title, sub, hrs, cls]) =>
-    `<div class="sprint-row"><div><p class="small-strong">${title}</p><p class="meta">${sub}</p></div><span class="mono ${cls}">${hrs}</span></div>`
-  ).join('');
+  const cta = state.wtStep < 3 ? `<button type="button" class="btn primary sm" data-wt-next>Next &rarr;</button>` : `<button type="button" class="btn primary sm" id="wt-start-btn">Try your syllabus &rarr;</button>`;
+  $('walkthrough-stage').innerHTML = `<div class="stack-sm">${views[state.wtStep]}</div><div class="row between border-t" style="padding-top:10px"><span class="meta">Step 0${state.wtStep + 1} / 04</span>${cta}</div>`;
 }
 
 function renderApp() {
@@ -203,7 +231,7 @@ function renderApp() {
   $('landing-view').hidden = on; $('workspace-view').hidden = !on;
   $('landing-nav').hidden = on; $('workspace-nav').hidden = !on;
   $('primary-action-btn').textContent = on ? '+ New Subject' : 'Sign In';
-  if (!on) return renderEstimator();
+  if (!on) return renderWalkthrough();
   $('user-display-name').textContent = state.user.displayName || 'Student';
   $('user-email').textContent = state.user.email || '';
   $('welcome-heading').textContent = `Ready to plan, ${(state.user.displayName || 'Student').split(' ')[0]}?`;
@@ -321,12 +349,14 @@ document.addEventListener('click', async (e) => {
   const t = e.target.closest('button');
   if (!t) return;
   if (t.id === 'landing-signin-btn') return signIn();
-  if (t.id === 'primary-action-btn' || t.id === 'sidebar-add-btn' || t.id === 'empty-add-subject-btn' || t.id === 'est-start-btn') return state.user ? openModal(true) : signIn();
+  if (t.id === 'primary-action-btn' || t.id === 'sidebar-add-btn' || t.id === 'empty-add-subject-btn' || t.id === 'wt-start-btn') return state.user ? openModal(true) : signIn();
   if (t.id === 'signout-btn') return signOut(auth);
   if (t.id === 'close-modal-btn' || t.id === 'cancel-modal-btn') return openModal(false);
 
-  if (t.dataset.estDays) { state.estDays = Number(t.dataset.estDays); return renderEstimator(); }
-  if (t.dataset.estHours) { state.estHours = Number(t.dataset.estHours); return renderEstimator(); }
+  if (t.dataset.wtCourse) { state.wtCourse = t.dataset.wtCourse; state.wtPick = null; return renderWalkthrough(); }
+  if (t.dataset.wtStep !== undefined) { state.wtStep = Number(t.dataset.wtStep); state.wtPick = null; return renderWalkthrough(); }
+  if (t.hasAttribute('data-wt-next')) { state.wtStep = Math.min(3, state.wtStep + 1); state.wtPick = null; return renderWalkthrough(); }
+  if (t.dataset.wtOpt !== undefined) { state.wtPick = Number(t.dataset.wtOpt); return renderWalkthrough(); }
 
   if (t.dataset.tab && curSub()) { state.tab = t.dataset.tab; return renderWorkspace(); }
   if (t.dataset.selectSubject) { state.subId = t.dataset.selectSubject; state.sumId = null; state.quizId = null; return subscribeSubject(state.subId); }

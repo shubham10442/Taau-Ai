@@ -19,7 +19,7 @@
       <div class="topbar-inner">
         <a href="#top" class="brand">Taau Ai</a>
         <nav id="landing-nav" class="nav">
-          <a href="#sprint-estimator" class="nav-link">Estimator</a>
+          <a href="#walkthrough" class="nav-link">Walkthrough</a>
           <a href="#workflow" class="nav-link">How I use it</a>
           <a href="#limits" class="nav-link">Limits</a>
         </nav>
@@ -52,40 +52,21 @@
           </div>
         </div>
 
-        <div id="sprint-estimator" class="col-6 card">
+        <div id="walkthrough" class="col-6 card">
           <div class="row between wrap">
-            <div>
-              <h2 class="h3">Exam Sprint Estimator</h2>
-              <p class="meta">Preview how your prep hours split before finals</p>
+            <div class="seg-group">
+              <button type="button" class="seg wt-course is-active" data-wt-course="dsa">CS101 · Data Structures</button>
+              <button type="button" class="seg wt-course" data-wt-course="discrete">MA102 · Discrete Math</button>
             </div>
-            <span id="est-total" class="mono lime">18h total</span>
+            <span class="meta mono" id="wt-meta-tag"></span>
           </div>
-
-          <div class="row between wrap">
-            <div class="stack-sm">
-              <span class="meta">Days left</span>
-              <div class="seg-group" id="est-days-group">
-                <button type="button" class="seg" data-est-days="3">3d</button>
-                <button type="button" class="seg is-active" data-est-days="6">6d</button>
-                <button type="button" class="seg" data-est-days="10">10d</button>
-              </div>
-            </div>
-            <div class="stack-sm">
-              <span class="meta">Hours / day</span>
-              <div class="seg-group" id="est-hours-group">
-                <button type="button" class="seg" data-est-hours="2">2h</button>
-                <button type="button" class="seg is-active" data-est-hours="3">3h</button>
-                <button type="button" class="seg" data-est-hours="4">4h</button>
-              </div>
-            </div>
+          <div class="wt-steps">
+            <button type="button" class="wt-step is-active" data-wt-step="0"><span class="mono">01</span> Syllabus</button>
+            <button type="button" class="wt-step" data-wt-step="1"><span class="mono">02</span> Plan</button>
+            <button type="button" class="wt-step" data-wt-step="2"><span class="mono">03</span> Sheet</button>
+            <button type="button" class="wt-step" data-wt-step="3"><span class="mono">04</span> Quiz</button>
           </div>
-
-          <div id="est-breakdown" class="stack-sm"></div>
-
-          <div class="row between border-t" style="padding-top:12px">
-            <span class="meta">50% concepts · 30% practice · 20% drills</span>
-            <button type="button" class="btn primary sm" id="est-start-btn">Try your syllabus &rarr;</button>
-          </div>
+          <div id="walkthrough-stage" class="wt-stage"></div>
         </div>
       </section>
 
