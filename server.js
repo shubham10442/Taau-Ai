@@ -63,6 +63,27 @@ async function startServer() {
   const app = express();
   app.use(express.json({ limit: '15mb' }));
 
+  // Allow requests from GitHub Pages or configured origins when backend is hosted separately
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    const allowedList = (process.env.ALLOWED_ORIGINS || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const isGitHubPages = Boolean(origin && /^https:\/\/[a-z0-9-]+\.github\.io$/i.test(origin));
+    const isExplicitlyAllowed = Boolean(origin && allowedList.includes(origin));
+
+    if (isGitHubPages || isExplicitlyAllowed) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    }
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(204);
+    }
+    next();
+  });
+
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok' });
   });

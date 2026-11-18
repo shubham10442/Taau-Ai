@@ -162,14 +162,19 @@ function showBanner(elementId, message) {
   el.hidden = !message;
 }
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
 async function postJson(url, payload) {
-  const response = await fetch(url, {
+  const response = await fetch(`${API_BASE_URL}${url}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (response.status === 404 && !API_BASE_URL) {
+      throw new Error('AI API endpoint not found on static hosting. Set VITE_API_BASE_URL to your backend URL.');
+    }
     throw new Error(data.error || `Request failed (${response.status})`);
   }
   return data;
