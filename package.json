@@ -9,7 +9,7 @@
     "start": "node server.js",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "node --check server.js && node --check src/app.js && eslint ."
+    "lint": "node --check server.js && node --check app.js && eslint ."
   },
   "dependencies": {
     "@firebase/eslint-plugin-security-rules": "^0.0.2",
