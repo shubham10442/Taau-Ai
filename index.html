@@ -18,55 +18,40 @@
     <header class="topbar">
       <div class="topbar-inner">
         <a href="#top" class="brand">Taau Ai</a>
+
         <nav id="landing-nav" class="nav">
-          <a href="#walkthrough" class="nav-link">Walkthrough</a>
           <a href="#workflow" class="nav-link">How I use it</a>
           <a href="#limits" class="nav-link">Limits</a>
         </nav>
+
         <nav id="workspace-nav" class="nav nav-tabs" hidden>
           <button type="button" class="tab is-active" data-tab="overview">Overview</button>
           <button type="button" class="tab" data-tab="plan">Study Plan</button>
           <button type="button" class="tab" data-tab="summaries">Summaries</button>
           <button type="button" class="tab" data-tab="quizzes">Quizzes</button>
         </nav>
+
         <button type="button" id="primary-action-btn" class="btn primary">Sign In</button>
       </div>
     </header>
 
-    <div id="boot-loader" class="center-screen"><p class="muted">Loading your study desk...</p></div>
+    <div id="boot-loader" class="center-screen">
+      <p class="muted">Loading your study desk...</p>
+    </div>
 
-    <!-- Signed-out Landing -->
+    <!-- Signed-out Landing Page -->
     <main id="landing-view" class="container stack-xl" hidden>
-      <section id="top" class="grid-12">
-        <div class="col-6 stack-lg">
-          <div class="stack-sm">
-            <h1 class="hero-title">Turn a messy course PDF into a realistic study plan.</h1>
-          </div>
-          <div class="stack-sm">
-            <div class="row wrap">
-              <button type="button" id="landing-signin-btn" class="btn primary lg">Sign in with Google &rarr;</button>
-              <a href="#workflow" class="btn secondary lg">See how it handles a real week</a>
-            </div>
-            <p id="auth-error-msg" class="amber" role="alert" hidden></p>
-            <p class="meta">Saves progress in Firebase · Accepts text, PDFs, or photos </p>
-          </div>
+      <section id="top" class="stack-lg">
+        <div class="stack-sm">
+          <h1 class="hero-title">Turn a messy course PDF into a realistic study plan.</h1>
         </div>
-
-        <div id="walkthrough" class="col-6 card">
-          <div class="row between wrap">
-            <div class="seg-group">
-              <button type="button" class="seg wt-course is-active" data-wt-course="dsa">CS101 · Data Structures</button>
-              <button type="button" class="seg wt-course" data-wt-course="discrete">MA102 · Discrete Math</button>
-            </div>
-            <span class="meta mono" id="wt-meta-tag"></span>
+        <div class="stack-sm">
+          <div class="row wrap">
+            <button type="button" id="landing-signin-btn" class="btn primary lg">Sign in with Google &rarr;</button>
+            <a href="#workflow" class="btn secondary lg">See how it handles a real week</a>
           </div>
-          <div class="wt-steps">
-            <button type="button" class="wt-step is-active" data-wt-step="0"><span class="mono">01</span> Syllabus</button>
-            <button type="button" class="wt-step" data-wt-step="1"><span class="mono">02</span> Plan</button>
-            <button type="button" class="wt-step" data-wt-step="2"><span class="mono">03</span> Sheet</button>
-            <button type="button" class="wt-step" data-wt-step="3"><span class="mono">04</span> Quiz</button>
-          </div>
-          <div id="walkthrough-stage" class="wt-stage"></div>
+          <p id="auth-error-msg" class="amber" role="alert" hidden></p>
+          <p class="meta">Saves progress in Firebase · Accepts text, PDFs, or photos </p>
         </div>
       </section>
 
@@ -77,34 +62,73 @@
             <h2 class="h2">No magic shortcuts, just less friction before you start solving.</h2>
           </div>
           <div class="steps-list">
-            <div class="step-row"><span class="mono lime">01.</span><div><h3>Paste the official unit list, not the textbook</h3><p class="muted">Upload the department syllabus PDF, a board photo, or bullets with your daily hours.</p></div></div>
-            <div class="step-row"><span class="mono amber">02.</span><div><h3>Heavy topics early, timed drills last</h3><p class="muted">Foundational theorems land on days 1–3; timed review sits in the final 48 hours.</p></div></div>
-            <div class="step-row"><span class="mono">03.</span><div><h3>Drill the questions you actually missed</h3><p class="muted">Graded quiz mistakes feed straight into a focused weak-topic drill.</p></div></div>
+            <div class="step-row">
+              <span class="mono lime">01.</span>
+              <div>
+                <h3>Paste the official unit list, not the textbook</h3>
+                <p class="muted">Upload the department syllabus PDF, a board photo, or bullets with your daily hours.</p>
+              </div>
+            </div>
+            <div class="step-row">
+              <span class="mono amber">02.</span>
+              <div>
+                <h3>Heavy topics early, timed drills last</h3>
+                <p class="muted">Foundational theorems land on days 1–3; timed review sits in the final 48 hours.</p>
+              </div>
+            </div>
+            <div class="step-row">
+              <span class="mono">03.</span>
+              <div>
+                <h3>Drill the questions you actually missed</h3>
+                <p class="muted">Graded quiz mistakes feed straight into a focused weak-topic drill.</p>
+              </div>
+            </div>
           </div>
         </div>
 
         <aside id="limits" class="col-5 card">
-          <div class="row between"><h2 class="h3">Honest Scope &amp; Rules</h2><span class="meta">Read before cramming</span></div>
+          <div class="row between">
+            <h2 class="h3">Honest Scope &amp; Rules</h2>
+            <span class="meta">Read before cramming</span>
+          </div>
           <div class="stack-sm">
-            <div class="divider-top"><strong>Best for 1 to 14 day exam sprints</strong><p class="muted">Built for midterms and end-sems, not year-long planning.</p></div>
-            <div class="divider-top"><strong>Check formulas against class slides</strong><p class="muted">Verify notation against your lecturer's rubric.</p></div>
-            <div class="divider-top"><strong>10 MB cap on uploaded files</strong><p class="muted">Upload the syllabus outline rather than a textbook PDF.</p></div>
+            <div class="divider-top">
+              <strong>Best for 1 to 14 day exam sprints</strong>
+              <p class="muted">Built for midterms and end-sems, not year-long planning.</p>
+            </div>
+            <div class="divider-top">
+              <strong>Check formulas against class slides</strong>
+              <p class="muted">Verify notation against your lecturer's rubric.</p>
+            </div>
+            <div class="divider-top">
+              <strong>10 MB cap on uploaded files</strong>
+              <p class="muted">Upload the syllabus outline rather than a textbook PDF.</p>
+            </div>
           </div>
         </aside>
       </section>
 
-      <footer class="footer"><span>Taau Ai · Exam Revision Workspace</span><span>HTML, CSS, JavaScript, Firebase &amp; Gemini</span></footer>
+      <footer class="footer">
+        <span>Taau Ai · Exam Revision Workspace</span>
+        <span>HTML, CSS, JavaScript, Firebase &amp; Gemini</span>
+      </footer>
     </main>
 
-    <!-- Signed-in Workspace -->
+    <!-- Signed-in Study Workspace -->
     <div id="workspace-view" class="workspace" hidden>
       <aside class="sidebar">
-        <div class="stack-md" style="padding:20px">
-          <div class="row between"><h2 class="sidebar-title">My Subjects (<span id="subject-count">0</span>)</h2><button type="button" id="sidebar-add-btn" class="circle-btn" aria-label="Add subject">+</button></div>
+        <div class="stack-md pad-md">
+          <div class="row between">
+            <h2 class="sidebar-title">My Subjects (<span id="subject-count">0</span>)</h2>
+            <button type="button" id="sidebar-add-btn" class="circle-btn" aria-label="Add subject">+</button>
+          </div>
           <div id="subject-list" class="subject-list"></div>
         </div>
         <div class="sidebar-footer">
-          <div class="min-0"><p id="user-display-name" class="truncate small-strong"></p><p id="user-email" class="truncate meta"></p></div>
+          <div class="min-0">
+            <p id="user-display-name" class="truncate small-strong"></p>
+            <p id="user-email" class="truncate meta"></p>
+          </div>
           <button type="button" id="signout-btn" class="btn ghost sm">Sign out</button>
         </div>
       </aside>
@@ -120,47 +144,80 @@
 
         <div id="subject-workspace" class="stack-lg" hidden>
           <div class="row between wrap">
-            <div><h1 id="subject-title-heading" class="subject-title"></h1><p id="subject-meta-line" class="meta"></p></div>
+            <div>
+              <h1 id="subject-title-heading" class="subject-title"></h1>
+              <p id="subject-meta-line" class="meta"></p>
+            </div>
             <div class="card compact readiness-box">
-              <div class="row between"><span class="meta">Progress</span><span id="readiness-percent" class="mono lime">0%</span></div>
-              <div class="track"><div id="readiness-bar-fill" class="fill"></div></div>
+              <div class="row between">
+                <span class="meta">Progress</span>
+                <span id="readiness-percent" class="mono lime">0%</span>
+              </div>
+              <div class="track">
+                <div id="readiness-bar-fill" class="fill"></div>
+              </div>
             </div>
           </div>
 
           <div class="kpi-strip">
-            <div class="card compact"><span class="meta">Days Left</span><span id="kpi-days" class="kpi">0d</span></div>
-            <div class="card compact"><span class="meta">Milestones Done</span><span id="kpi-milestones" class="kpi">0/0</span></div>
-            <div class="card compact"><span class="meta">Quiz Average</span><span id="kpi-quiz-avg" class="kpi">—</span></div>
+            <div class="card compact">
+              <span class="meta">Days Left</span>
+              <span id="kpi-days" class="kpi">0d</span>
+            </div>
+            <div class="card compact">
+              <span class="meta">Milestones Done</span>
+              <span id="kpi-milestones" class="kpi">0/0</span>
+            </div>
+            <div class="card compact">
+              <span class="meta">Quiz Average</span>
+              <span id="kpi-quiz-avg" class="kpi">—</span>
+            </div>
           </div>
 
-          <!-- 1. Overview -->
+          <!-- Tab 1: Overview -->
           <section id="panel-overview" class="grid-12">
             <div class="col-7 stack-md">
               <div class="card">
-                <div class="row between"><h2 class="h3">What Is on the Exam</h2><span id="overview-sheets-count" class="meta"></span></div>
+                <div class="row between">
+                  <h2 class="h3">What Is on the Exam</h2>
+                  <span id="overview-sheets-count" class="meta"></span>
+                </div>
                 <p id="overview-syllabus-text" class="body-copy"></p>
               </div>
               <div class="card flush">
-                <div class="row between card-pad border-b"><h2 class="h3">Topics Found</h2><span class="meta">Jump to sheet or quiz</span></div>
+                <div class="row between card-pad border-b">
+                  <h2 class="h3">Topics Found</h2>
+                  <span class="meta">Jump to sheet or quiz</span>
+                </div>
                 <div id="overview-topics-list" class="divide-list"></div>
               </div>
             </div>
+
             <div class="col-5 stack-md">
               <div class="card flush">
-                <div class="row between card-pad border-b"><h2 class="h3">Up Next</h2><button type="button" id="jump-full-schedule-btn" class="link-btn">Full Schedule</button></div>
+                <div class="row between card-pad border-b">
+                  <h2 class="h3">Up Next</h2>
+                  <button type="button" id="jump-full-schedule-btn" class="link-btn">Full Schedule</button>
+                </div>
                 <div id="overview-next-tasks" class="divide-list"></div>
               </div>
               <div class="card compact">
-                <div id="delete-prompt-default" class="row between"><span class="meta">Done with this paper?</span><button type="button" id="ask-delete-subject-btn" class="link-danger">Remove Subject</button></div>
+                <div id="delete-prompt-default" class="row between">
+                  <span class="meta">Done with this paper?</span>
+                  <button type="button" id="ask-delete-subject-btn" class="link-danger">Remove Subject</button>
+                </div>
                 <div id="delete-prompt-confirm" class="row between" hidden>
                   <span class="small-strong">Delete subject &amp; data?</span>
-                  <div class="row"><button type="button" id="cancel-delete-subject-btn" class="btn secondary sm">Cancel</button><button type="button" id="confirm-delete-subject-btn" class="btn danger sm">Delete</button></div>
+                  <div class="row">
+                    <button type="button" id="cancel-delete-subject-btn" class="btn secondary sm">Cancel</button>
+                    <button type="button" id="confirm-delete-subject-btn" class="btn danger sm">Delete</button>
+                  </div>
                 </div>
               </div>
             </div>
           </section>
 
-          <!-- 2. Study Plan -->
+          <!-- Tab 2: Study Plan -->
           <section id="panel-plan" hidden>
             <div class="card flush">
               <div class="row between wrap card-pad border-b">
@@ -171,24 +228,51 @@
                 </div>
                 <button type="button" id="toggle-add-task-btn" class="btn secondary sm">+ Add Milestone</button>
               </div>
+
               <form id="add-milestone-form" class="inline-form" hidden>
                 <div class="form-grid-4">
-                  <div class="field"><label for="milestone-topic">Topic</label><input id="milestone-topic" required placeholder="Topic name" /></div>
-                  <div class="field"><label for="milestone-date">Target Date</label><input id="milestone-date" type="date" required class="mono" /></div>
-                  <div class="field"><label for="milestone-duration">Minutes</label><input id="milestone-duration" type="number" min="10" max="240" value="45" class="mono" /></div>
-                  <div class="field"><label for="milestone-priority">Priority</label><select id="milestone-priority"><option value="high">High</option><option value="medium">Medium</option><option value="normal">Normal</option></select></div>
+                  <div class="field">
+                    <label for="milestone-topic">Topic</label>
+                    <input id="milestone-topic" required placeholder="Topic name" />
+                  </div>
+                  <div class="field">
+                    <label for="milestone-date">Target Date</label>
+                    <input id="milestone-date" type="date" required class="mono" />
+                  </div>
+                  <div class="field">
+                    <label for="milestone-duration">Minutes</label>
+                    <input id="milestone-duration" type="number" min="10" max="240" value="45" class="mono" />
+                  </div>
+                  <div class="field">
+                    <label for="milestone-priority">Priority</label>
+                    <select id="milestone-priority">
+                      <option value="high">High</option>
+                      <option value="medium">Medium</option>
+                      <option value="normal">Normal</option>
+                    </select>
+                  </div>
                 </div>
-                <div class="field"><label for="milestone-desc">What to Practice</label><input id="milestone-desc" required placeholder="e.g., Solve 10 past-paper problems" /></div>
-                <div class="row end"><button type="button" id="cancel-add-task-btn" class="btn secondary sm">Cancel</button><button type="submit" class="btn primary sm">Save Milestone</button></div>
+                <div class="field">
+                  <label for="milestone-desc">What to Practice</label>
+                  <input id="milestone-desc" required placeholder="e.g., Solve 10 past-paper problems" />
+                </div>
+                <div class="row end">
+                  <button type="button" id="cancel-add-task-btn" class="btn secondary sm">Cancel</button>
+                  <button type="submit" class="btn primary sm">Save Milestone</button>
+                </div>
               </form>
+
               <div id="plan-tasks-list" class="divide-list"></div>
             </div>
           </section>
 
-          <!-- 3. Summaries -->
+          <!-- Tab 3: Summaries -->
           <section id="panel-summaries" hidden>
-            <div class="row between wrap" style="margin-bottom:18px">
-              <div><p class="meta">Double-check formulas against class slides</p><h2 class="h2">Topic Sheets &amp; Formulas</h2></div>
+            <div class="row between wrap mb-md">
+              <div>
+                <p class="meta">Double-check formulas against class slides</p>
+                <h2 class="h2">Topic Sheets &amp; Formulas</h2>
+              </div>
               <div class="row wrap">
                 <select id="summary-topic-select" class="pill-select" aria-label="Select topic"></select>
                 <input id="summary-custom-topic" class="input" placeholder="Custom topic" hidden />
@@ -199,14 +283,24 @@
             <div id="summaries-container"></div>
           </section>
 
-          <!-- 4. Quizzes -->
+          <!-- Tab 4: Quizzes -->
           <section id="panel-quizzes" hidden>
-            <div class="row between wrap" style="margin-bottom:18px">
-              <div><p class="meta">Instant grading with step-by-step explanations</p><h2 class="h2">Practice Quizzes</h2></div>
+            <div class="row between wrap mb-md">
+              <div>
+                <p class="meta">Instant grading with step-by-step explanations</p>
+                <h2 class="h2">Practice Quizzes</h2>
+              </div>
               <div class="row wrap">
                 <select id="quiz-topic-select" class="pill-select" aria-label="Quiz topic"></select>
-                <select id="quiz-difficulty-select" class="pill-select" aria-label="Difficulty"><option value="standard">Standard</option><option value="intensive">Intensive</option></select>
-                <select id="quiz-count-select" class="pill-select mono" aria-label="Count"><option value="5">5 Qs</option><option value="10">10 Qs</option><option value="15">15 Qs</option></select>
+                <select id="quiz-difficulty-select" class="pill-select" aria-label="Difficulty">
+                  <option value="standard">Standard</option>
+                  <option value="intensive">Intensive</option>
+                </select>
+                <select id="quiz-count-select" class="pill-select mono" aria-label="Count">
+                  <option value="5">5 Qs</option>
+                  <option value="10">10 Qs</option>
+                  <option value="15">15 Qs</option>
+                </select>
                 <button type="button" id="start-quiz-btn" class="btn primary">Start Quiz</button>
                 <button type="button" id="drill-weak-btn" class="btn amber-btn" hidden>Drill Missed</button>
               </div>
@@ -221,30 +315,53 @@
     <!-- Add Subject Modal -->
     <div id="add-subject-modal" class="modal-backdrop" role="dialog" aria-modal="true" hidden>
       <div class="card flush modal-dialog">
-        <div class="row between card-pad border-b" style="background:var(--muted-bg)">
-          <div><h2 class="h3">Add Exam Subject</h2><p class="meta">Paste syllabus or attach a PDF/photo (10 MB max).</p></div>
+        <div class="row between card-pad border-b modal-head">
+          <div>
+            <h2 class="h3">Add Exam Subject</h2>
+            <p class="meta">Paste syllabus or attach a PDF/photo (10 MB max).</p>
+          </div>
           <button type="button" id="close-modal-btn" class="circle-btn" aria-label="Close">&times;</button>
         </div>
-        <form id="add-subject-form" class="stack-md" style="padding:22px">
+
+        <form id="add-subject-form" class="stack-md pad-lg">
           <div class="form-grid-4">
-            <div class="field span-2"><label for="new-subject-title">Subject Name</label><input id="new-subject-title" maxlength="120" required placeholder="e.g., Data Structures & Algorithms" /></div>
-            <div class="field"><label for="new-subject-date">Exam Date</label><input id="new-subject-date" type="date" required class="mono" /></div>
-            <div class="field"><label for="new-subject-hours">Hours / Day</label><input id="new-subject-hours" type="number" min="0.5" max="14" step="0.5" value="3" class="mono" /></div>
-          </div>
-          <div class="field">
-            <div class="row between">
-              <label for="new-subject-syllabus">Syllabus Units</label>
-              <div class="row"><span class="meta">Sample:</span><button type="button" class="link-btn sample-btn" data-sample="0">DSA</button><span class="meta">·</span><button type="button" class="link-btn sample-btn" data-sample="1">Discrete Math</button></div>
+            <div class="field span-2">
+              <label for="new-subject-title">Subject Name</label>
+              <input id="new-subject-title" maxlength="120" required placeholder="e.g., Data Structures & Algorithms" />
             </div>
+            <div class="field">
+              <label for="new-subject-date">Exam Date</label>
+              <input id="new-subject-date" type="date" required class="mono" />
+            </div>
+            <div class="field">
+              <label for="new-subject-hours">Hours / Day</label>
+              <input id="new-subject-hours" type="number" min="0.5" max="14" step="0.5" value="3" class="mono" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="new-subject-syllabus">Syllabus Units</label>
             <textarea id="new-subject-syllabus" rows="4" placeholder="Paste units or topic bullets..."></textarea>
           </div>
+
           <div class="file-drop">
             <span id="uploaded-file-name" class="meta">No file attached (PDF/PNG/JPG/TXT, 10 MB max)</span>
-            <div class="row"><button type="button" id="clear-file-btn" class="btn secondary sm" hidden>Remove</button><label class="btn secondary sm">Choose File<input id="syllabus-file-input" type="file" accept=".pdf,.txt,.md,image/png,image/jpeg,image/webp" hidden /></label></div>
+            <div class="row">
+              <button type="button" id="clear-file-btn" class="btn secondary sm" hidden>Remove</button>
+              <label class="btn secondary sm">
+                Choose File
+                <input id="syllabus-file-input" type="file" accept=".pdf,.txt,.md,image/png,image/jpeg,image/webp" hidden />
+              </label>
+            </div>
           </div>
+
           <p id="modal-error" class="banner error" role="alert" hidden></p>
           <p id="modal-status" class="banner ok" hidden></p>
-          <div class="row end border-t" style="padding-top:14px"><button type="button" id="cancel-modal-btn" class="btn secondary">Cancel</button><button type="submit" id="submit-subject-btn" class="btn primary">Build Study Plan</button></div>
+
+          <div class="row end border-t pt-md">
+            <button type="button" id="cancel-modal-btn" class="btn secondary">Cancel</button>
+            <button type="submit" id="submit-subject-btn" class="btn primary">Build Study Plan</button>
+          </div>
         </form>
       </div>
     </div>
